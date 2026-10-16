@@ -8,11 +8,9 @@ kotlin {
 }
 
 dependencies {
-    api(libs.newpipe.extractor)
     api(libs.okhttp)
     api(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
-    testImplementation(libs.okhttp.mockwebserver)
 }
