@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- For the built-in update button -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- A TV app: no touchscreen needed, leanback launcher required -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -38,5 +40,9 @@
                 <data android:host="youtu.be" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -23,19 +23,19 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import io.github.rymos.turbotube.core.Account
+import io.github.rymos.turbotube.update.UpdateState
 import kotlinx.coroutines.launch
 
 @Composable
 fun AccountPanel() {
     val container = LocalContainer.current
     val cache = LocalListCache.current
-    val scope = rememberCoroutineScope()
     if (!container.loggedIn) {
         Text("Nicht angemeldet. Ohne Anmeldung gehen Suche, Kanäle und Entdecken.")
         return
     }
     var account by remember { mutableStateOf<Account?>(null) }
-    LaunchedEffect(Unit) { account = runCatching { container.accountApi.account() }.getOrNull() }
+    LaunchedEffect(Unit) { account = runCatching { container.tv.account() }.getOrNull() }
 
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
         AsyncImage(
@@ -48,11 +48,9 @@ fun AccountPanel() {
             Text(account?.name ?: "…", style = MaterialTheme.typography.titleLarge)
         }
         Button(onClick = {
-            scope.launch {
-                container.auth.logout()
-                container.onLoginChanged()
-                cache.clear()
-            }
+            container.auth.logout()
+            container.onLoginChanged()
+            cache.clear()
         }) {
             Text("Abmelden")
         }
@@ -76,6 +74,46 @@ fun QualityPanel() {
                         },
                     ) { Text(label) }
                 }
+        }
+    }
+}
+
+@Composable
+fun UpdatePanel() {
+    val updater = LocalContainer.current.updater
+    val scope = rememberCoroutineScope()
+    val state = updater.state
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Updates", style = MaterialTheme.typography.titleMedium)
+        Text(
+            when (state) {
+                UpdateState.Idle -> "Installiert: Build ${updater.currentBuild}"
+                UpdateState.Checking -> "Suche nach Updates …"
+                UpdateState.UpToDate -> "Du hast die neueste Version (Build ${updater.currentBuild})."
+                is UpdateState.Available ->
+                    "Neue Version verfügbar: Build ${state.update.buildNumber} (installiert: ${updater.currentBuild})"
+                is UpdateState.Downloading -> "Lädt Build ${state.update.buildNumber} … ${(state.progress * 100).toInt()} %"
+                UpdateState.Installing -> "Installation wird gestartet …"
+                UpdateState.NeedsPermission ->
+                    "Turbotube braucht einmalig die Erlaubnis, Apps zu installieren: Einstellungen → Apps → " +
+                        "Sicherheit und Einschränkungen → Unbekannte Quellen → Turbotube einschalten. " +
+                        "Danach hier nochmal auf „Update installieren“ drücken."
+                is UpdateState.Failed -> state.message
+            },
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val busy = state is UpdateState.Checking || state is UpdateState.Downloading ||
+                state is UpdateState.Installing
+            Button(enabled = !busy, onClick = { scope.launch { updater.check() } }) {
+                Text("Nach Updates suchen")
+            }
+            val pending = (state as? UpdateState.Available)?.update ?: updater.lastFound
+            if (pending != null) {
+                Button(enabled = !busy, onClick = { scope.launch { updater.install(pending) } }) {
+                    Text("Update installieren")
+                }
+            }
         }
     }
 }

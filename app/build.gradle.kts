@@ -5,8 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// OAuth client for "Login with Google". Comes from local.properties or environment variables,
-// never from the repository. See README.md for how to create one.
+// Signing secrets come from local.properties or environment variables, never from the repository.
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use(::load)
@@ -30,13 +29,12 @@ android {
         applicationId = "io.github.rymos.turbotube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-
-        buildConfigField("String", "OAUTH_CLIENT_ID", "\"${secret("TURBOTUBE_OAUTH_CLIENT_ID")}\"")
-        buildConfigField(
-            "String", "OAUTH_CLIENT_SECRET", "\"${secret("TURBOTUBE_OAUTH_CLIENT_SECRET")}\"",
-        )
+        // GitHub Actions passes its run number, which is also the number of the release
+        // (build-<n>). The update button compares against it.
+        val build = secret("TURBOTUBE_BUILD_NUMBER").toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.2.$build"
+        buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 
     signingConfigs {
