@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Turbotube" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorBackground">@color/background</item>
+    </style>
+    <color name="background">#FF0E0F13</color>
+</resources>
