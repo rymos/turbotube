@@ -102,9 +102,10 @@ class MainActivity : ComponentActivity() {
             mediaPlaybackRequiresUserGesture = false
             userAgentString = TV_USER_AGENT
         }
+        val view = this
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            setAcceptThirdPartyCookies(this@apply, true)
+            setAcceptThirdPartyCookies(view, true)
         }
         webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
