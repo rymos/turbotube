@@ -12,10 +12,11 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import io.github.rymos.turbotube.core.Channel
 import io.github.rymos.turbotube.core.YouTube
-import io.github.rymos.turbotube.core.account.GoogleDeviceAuth
 import io.github.rymos.turbotube.core.account.TokenStore
-import io.github.rymos.turbotube.core.account.YouTubeAccountApi
+import io.github.rymos.turbotube.core.account.YouTubeTvApi
+import io.github.rymos.turbotube.core.account.YouTubeTvAuth
 import io.github.rymos.turbotube.player.YouTubeMediaSources
+import io.github.rymos.turbotube.update.Updater
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -47,14 +48,12 @@ class AppContainer(context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    val auth = GoogleDeviceAuth(
-        client = http,
-        clientId = BuildConfig.OAUTH_CLIENT_ID,
-        clientSecret = BuildConfig.OAUTH_CLIENT_SECRET,
-        store = settings,
-    )
+    val auth = YouTubeTvAuth(http, settings)
 
-    val accountApi = YouTubeAccountApi(http, auth)
+    /** The signed-in part of YouTube (start page, subscriptions, watch later, history, …). */
+    val tv = YouTubeTvApi(http, auth)
+
+    val updater = Updater(context.applicationContext, http)
 
     /** Observable, so the menu updates right after logging in or out. */
     var loggedIn by mutableStateOf(auth.isLoggedIn)
@@ -66,7 +65,7 @@ class AppContainer(context: Context) {
 
     /** The user's subscriptions, loaded once and kept until the login changes. */
     suspend fun subscriptions(): List<Channel> = subscriptionsLock.withLock {
-        cachedSubscriptions ?: accountApi.subscriptions().also { cachedSubscriptions = it }
+        cachedSubscriptions ?: tv.subscriptions().also { cachedSubscriptions = it }
     }
 
     fun onLoginChanged() {
@@ -82,6 +81,18 @@ class Settings(context: Context) : TokenStore {
     override var refreshToken: String?
         get() = prefs.getString("refresh_token", null)
         set(value) = prefs.edit().putString("refresh_token", value).apply()
+
+    override var clientId: String?
+        get() = prefs.getString("client_id", null)
+        set(value) = prefs.edit().putString("client_id", value).apply()
+
+    override var clientSecret: String?
+        get() = prefs.getString("client_secret", null)
+        set(value) = prefs.edit().putString("client_secret", value).apply()
+
+    override var deviceId: String?
+        get() = prefs.getString("device_id", null)
+        set(value) = prefs.edit().putString("device_id", value).apply()
 
     /** Highest video height to play; 0 means "as high as the TV supports". */
     var maxQuality: Int

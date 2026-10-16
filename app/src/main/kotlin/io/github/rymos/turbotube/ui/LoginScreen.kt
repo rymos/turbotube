@@ -39,15 +39,6 @@ fun LoginScreen(onDone: () -> Unit) {
     var code by remember { mutableStateOf<DeviceCode?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    if (!container.auth.isConfigured) {
-        Message(
-            "Anmeldung nicht eingerichtet",
-            "Diese Turbotube-Version wurde ohne Google-OAuth-Client gebaut. " +
-                "Wie man ihn anlegt, steht in der README unter \"Google-Login einrichten\".",
-        )
-        return
-    }
-
     LaunchedEffect(Unit) {
         while (true) {
             try {
@@ -79,7 +70,7 @@ fun LoginScreen(onDone: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Mit Google anmelden", style = MaterialTheme.typography.headlineMedium)
+                    Text("Mit YouTube anmelden", style = MaterialTheme.typography.headlineMedium)
                     Text(
                         "1. Öffne auf dem Handy oder Computer:",
                         style = MaterialTheme.typography.titleMedium,
@@ -100,7 +91,7 @@ fun LoginScreen(onDone: () -> Unit) {
                             .padding(horizontal = 24.dp, vertical = 8.dp),
                     )
                     Text(
-                        "3. Melde dich an und erlaube den Zugriff. Der Fernseher meldet sich dann " +
+                        "3. Wähle dein Google-Konto und bestätige. Der Fernseher meldet sich dann " +
                             "von selbst an.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

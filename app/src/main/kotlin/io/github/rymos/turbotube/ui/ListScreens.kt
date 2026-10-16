@@ -20,7 +20,7 @@ fun PlaylistScreen(screen: Screen.Playlist) {
     val container = LocalContainer.current
     val paged = rememberPaged("playlist:${screen.url}") { next ->
         if (screen.own) {
-            container.accountApi.playlistVideos(screen.id, next)
+            container.tv.playlistVideos(screen.id, next)
         } else {
             YouTube.playlistVideos(screen.url, next)
         }
