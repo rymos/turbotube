@@ -8,16 +8,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,17 +39,22 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
+import io.github.rymos.turbotube.core.Item
 import io.github.rymos.turbotube.core.Page
 import io.github.rymos.turbotube.core.Playlist
 import io.github.rymos.turbotube.core.SubscriptionFeed
 import io.github.rymos.turbotube.core.YouTube
+import kotlinx.coroutines.CancellationException
 
 enum class Section(val label: String, val icon: ImageVector, val needsLogin: Boolean) {
-    Feed("Neu von Abos", Icons.Filled.Home, true),
+    Home("Start", Icons.Filled.Home, true),
+    Feed("Abos", Icons.Filled.Notifications, true),
     Search("Suche", Icons.Filled.Search, false),
-    Subscriptions("Abos", Icons.Filled.Person, true),
+    Subscriptions("Kanäle", Icons.Filled.Person, true),
+    WatchLater("Später ansehen", Icons.Filled.DateRange, true),
+    History("Verlauf", Icons.Filled.Refresh, true),
     Playlists("Playlists", Icons.Filled.List, true),
-    Liked("Mag ich", Icons.Filled.Favorite, true),
+    Liked("Mag ich", Icons.Filled.ThumbUp, true),
     Explore("Entdecken", Icons.Filled.Star, false),
     Account("Konto", Icons.Filled.AccountCircle, false),
 }
@@ -53,14 +64,18 @@ fun HomeScreen() {
     val container = LocalContainer.current
     val loggedIn = container.loggedIn
     var section by rememberSaveable {
-        mutableStateOf(if (loggedIn) Section.Feed else Section.Explore)
+        mutableStateOf(if (loggedIn) Section.Home else Section.Explore)
     }
+    // Look for a new version once per start; the menu then shows it next to "Konto"
+    LaunchedEffect(Unit) { container.updater.check(quiet = true) }
+    val updateWaiting = container.updater.lastFound != null
 
     NavigationDrawer(
         drawerContent = {
             Column(
-                Modifier.fillMaxHeight().padding(12.dp).selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+                // Eleven entries don't fit on a 540dp TV screen, so the menu scrolls with the focus
+                Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(12.dp).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
             ) {
                 Section.entries.filter { loggedIn || !it.needsLogin }.forEach { entry ->
                     NavigationDrawerItem(
@@ -68,7 +83,7 @@ fun HomeScreen() {
                         onClick = { section = entry },
                         leadingContent = { Icon(entry.icon, contentDescription = null) },
                     ) {
-                        Text(entry.label)
+                        Text(if (entry == Section.Account && updateWaiting) "Konto · Update" else entry.label)
                     }
                 }
             }
@@ -76,11 +91,14 @@ fun HomeScreen() {
     ) {
         Column(Modifier.fillMaxSize().padding(start = 8.dp)) {
             when (section) {
+                Section.Home -> TvListSection("home", "Start", "YouTube hat gerade keine Vorschläge.") { container.tv.home(it) }
                 Section.Feed -> FeedSection()
                 Section.Search -> SearchSection()
                 Section.Subscriptions -> SubscriptionsSection()
+                Section.WatchLater -> TvListSection("watchlater", "Später ansehen", "Die Liste ist leer.") { container.tv.watchLater(it) }
+                Section.History -> TvListSection("history", "Verlauf", "Noch nichts angesehen.") { container.tv.history(it) }
                 Section.Playlists -> PlaylistsSection()
-                Section.Liked -> LikedSection()
+                Section.Liked -> TvListSection("liked", "Videos, die du magst", "Noch keine Likes.") { container.tv.likedVideos(it) }
                 Section.Explore -> ExploreSection()
                 Section.Account -> AccountSection()
             }
@@ -98,20 +116,40 @@ fun SectionTitle(text: String) {
 }
 
 @Composable
+private fun TvListSection(key: String, title: String, emptyText: String, load: suspend (Any?) -> Page<Item>) {
+    val paged = rememberPaged(key) { next -> load(next) }
+    Column {
+        SectionTitle(title)
+        ItemGrid(paged, emptyText = emptyText)
+    }
+}
+
+@Composable
 private fun FeedSection() {
     val container = LocalContainer.current
     val paged = rememberPaged("feed") { next ->
-        if (next != null) {
+        if (next is RssFallback) {
             Page(emptyList())
         } else {
-            Page(SubscriptionFeed.load(container.subscriptions()))
+            val tvFeed = try {
+                container.tv.subscriptionFeed(next).takeIf { next != null || it.items.isNotEmpty() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            // Fallback: the channels' public RSS feeds
+            tvFeed ?: Page(SubscriptionFeed.load(container.subscriptions()), RssFallback)
         }
     }
     Column {
         SectionTitle("Neu von deinen Abos")
-        ItemGrid(paged, emptyText = "Keine neuen Videos in den letzten 30 Tagen.")
+        ItemGrid(paged, emptyText = "Keine neuen Videos von deinen Abos.")
     }
 }
+
+/** Marks that the feed came from RSS, which has no further pages. */
+private object RssFallback
 
 @Composable
 private fun SubscriptionsSection() {
@@ -129,13 +167,13 @@ private fun SubscriptionsSection() {
 private fun PlaylistsSection() {
     val container = LocalContainer.current
     val navigator = LocalNavigator.current
-    val paged = rememberPaged("playlists") { next -> container.accountApi.playlists(next) }
+    val paged = rememberPaged("playlists") { next -> container.tv.playlists(next) }
     Column {
         SectionTitle("Deine Playlists")
         ItemGrid(
             paged,
             emptyText = "Du hast noch keine Playlists.",
-            // Own playlists can be private, so they are opened through the account API
+            // Own playlists can be private, so they are opened through the signed-in API
             onOpen = { item ->
                 if (item is Playlist) {
                     navigator.push(Screen.Playlist(item.url, item.id, item.title, own = true))
@@ -144,16 +182,6 @@ private fun PlaylistsSection() {
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun LikedSection() {
-    val container = LocalContainer.current
-    val paged = rememberPaged("liked") { next -> container.accountApi.likedVideos(next) }
-    Column {
-        SectionTitle("Videos, die du magst")
-        ItemGrid(paged)
     }
 }
 
@@ -179,20 +207,25 @@ private fun ExploreSection() {
 private fun AccountSection() {
     val container = LocalContainer.current
     val navigator = LocalNavigator.current
-    Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Text("Konto", style = MaterialTheme.typography.headlineMedium)
         AccountPanel()
         Spacer(Modifier.height(16.dp))
         QualityPanel()
         Spacer(Modifier.height(16.dp))
+        UpdatePanel()
+        Spacer(Modifier.height(16.dp))
         Text(
-            "Turbotube zeigt keine Werbung und enthält keine Tracker. Die Anmeldung liest nur " +
-                "deine Abos, Playlists und Likes; was du schaust, wird nicht an dein Konto gemeldet.",
+            "Turbotube zeigt keine Werbung und enthält keine Tracker. Was du in Turbotube schaust, " +
+                "wird nicht an dein Konto gemeldet und landet nicht in deinem YouTube-Verlauf.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!container.loggedIn) {
-            Button(onClick = { navigator.push(Screen.Login) }) { Text("Mit Google anmelden") }
+            Button(onClick = { navigator.push(Screen.Login) }) { Text("Mit YouTube anmelden") }
         }
     }
 }

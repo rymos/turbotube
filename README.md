@@ -4,7 +4,9 @@ YouTube für den Fernseher, ohne Werbung und ohne Tracker. Gebaut für den **Goo
 läuft aber auf jedem Android-TV- oder Google-TV-Gerät ab Android 8.
 
 - Videos ohne Werbeunterbrechungen, bis 4K (AV1, VP9 oder H.264, je nachdem, was das Gerät in Hardware kann)
-- Mit dem eigenen Google-Konto anmelden: Abos, neue Videos der Abos, eigene Playlists, „Mag ich“
+- Mit dem eigenen YouTube-Konto anmelden, ganz ohne Einrichtung: Startseite mit Empfehlungen, Abos,
+  Kanäle, Später ansehen, Verlauf, eigene Playlists, „Mag ich“
+- Eingebauter Update-Knopf (Konto → Nach Updates suchen), kein Browser nötig
 - Suche mit Vorschlägen, Kanäle, öffentliche Playlists, Entdecken (Live, Musik, Gaming, Filme, Podcasts)
 - Keine Analyse- oder Werbebibliotheken, keine Google-Play-Dienste
 
@@ -14,11 +16,16 @@ läuft aber auf jedem Android-TV- oder Google-TV-Gerät ab Android 8.
 | --- | --- |
 | Abspielen, Suche, Kanäle, Entdecken | [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), anonym, ohne Konto und ohne API-Schlüssel |
 | Neue Videos deiner Abos | die öffentlichen RSS-Feeds der Kanäle, anonym |
-| Liste deiner Abos, Playlists, „Mag ich“ | offizielle YouTube Data API v3, nur lesend (`youtube.readonly`) |
+| Alles mit Anmeldung (Start, Abos, Verlauf, Später ansehen, Playlists, „Mag ich“) | die interne Schnittstelle der YouTube-TV-App, mit deinem Konto |
 
-Die Anmeldung läuft über den Google-Gerätecode-Ablauf für Fernseher: Der Fernseher zeigt einen Code,
-du gibst ihn auf dem Handy unter google.com/device ein. Dein Passwort berührt die App nie, und was du
-schaust, wird nicht an dein Konto gemeldet (also auch kein Verlauf bei Google).
+Die Anmeldung funktioniert wie bei SmartTube: Der Fernseher zeigt einen Code, du gibst ihn auf dem
+Handy unter **youtube.com/activate** ein. Turbotube nutzt dafür die Zugangsdaten der offiziellen
+YouTube-TV-App, die es beim Anmelden von youtube.com/tv liest. Niemand muss eine eigene Google-Cloud-
+Client-ID anlegen. Dein Passwort berührt die App nie, und was du schaust, wird nicht an dein Konto
+gemeldet (also auch kein Eintrag im YouTube-Verlauf).
+
+Das ist inoffiziell und verstößt streng genommen gegen YouTubes Nutzungsbedingungen. Wenn Google
+etwas ändert, kann die Anmeldung zeitweise ausfallen; Suche und Abspielen gehen dann trotzdem.
 
 Aufbau: `core/` ist reines Kotlin (YouTube-Zugriff, Anmeldung, Abo-Feed, Streamauswahl) und hat Tests,
 `app/` ist die Android-TV-Oberfläche mit Jetpack Compose for TV und Media3/ExoPlayer.
@@ -37,39 +44,15 @@ Aufbau: `core/` ist reines Kotlin (YouTube-Zugriff, Anmeldung, Abo-Feed, Streama
 Alternative für Leute mit Computer: In den Entwickleroptionen „Debugging über WLAN“ einschalten, dann
 `adb connect <IP-des-Streamers>` und `adb install turbotube.apk`.
 
-Updates installiert man genauso über die alte Version drüber. Das klappt nur, wenn beide APKs mit
-demselben Schlüssel signiert sind (siehe „Signaturschlüssel“ unten).
-
-## Google-Login einrichten
-
-Google verlangt für jede App, die auf ein Konto zugreift, eine eigene OAuth-Client-ID. Die legt man
-einmal kostenlos an:
-
-1. Auf [console.cloud.google.com](https://console.cloud.google.com) ein neues Projekt „Turbotube“ anlegen.
-2. *APIs und Dienste → Bibliothek* → **YouTube Data API v3** suchen und aktivieren.
-3. *Google Auth Platform* (früher „OAuth-Zustimmungsbildschirm“) einrichten: App-Name „Turbotube“,
-   deine E-Mail als Support- und Kontaktadresse, Zielgruppe **Extern**.
-4. Unter *Zielgruppe* auf **App veröffentlichen** klicken. Im Testmodus würde die Anmeldung nach
-   7 Tagen ablaufen. Beim ersten Login zeigt Google dann „Diese App wurde nicht überprüft“; dort auf
-   *Erweitert → Weiter zu Turbotube* gehen. Das ist bei privat genutzten Apps normal.
-5. *Clients → Client erstellen* → Anwendungstyp **Fernseher und Geräte mit begrenzter Eingabe** →
-   Client-ID und Clientschlüssel kopieren.
-6. Im GitHub-Repository unter *Settings → Secrets and variables → Actions* zwei Secrets anlegen:
-   `TURBOTUBE_OAUTH_CLIENT_ID` und `TURBOTUBE_OAUTH_CLIENT_SECRET`.
-
-Wer lokal baut, trägt die beiden Werte stattdessen in `local.properties` ein:
-
-```properties
-TURBOTUBE_OAUTH_CLIENT_ID=1234-abc.apps.googleusercontent.com
-TURBOTUBE_OAUTH_CLIENT_SECRET=GOCSPX-...
-```
-
-Ohne diese Werte läuft die App trotzdem, nur ohne Anmeldung.
+**Updates** gehen danach direkt in der App: Konto → **Nach Updates suchen** → **Update installieren**.
+Beim ersten Mal fragt Android, ob Turbotube Apps installieren darf. Das klappt nur, wenn alte und neue
+APK mit demselben Schlüssel signiert sind (siehe „Signaturschlüssel“ unten).
 
 ## Bauen
 
-Jeder Push auf `main` baut über GitHub Actions eine APK (unter *Actions → letzter Lauf → Artifacts*).
-Ein Tag wie `v0.1.0` erzeugt zusätzlich ein Release mit der APK zum Herunterladen.
+Jeder Push auf `main` baut über GitHub Actions eine APK und veröffentlicht sie als Release `build-<n>`.
+`n` ist die Laufnummer von GitHub Actions und zugleich der `versionCode` der APK; danach richtet sich
+der Update-Knopf in der App.
 
 Lokal: JDK 21 und das Android SDK installieren, dann
 
@@ -92,14 +75,13 @@ und als Secrets hinterlegen: `TURBOTUBE_KEYSTORE_BASE64` (die base64-Ausgabe),
 
 ## Bedienung
 
-- Links ins Menü: Neu von Abos, Suche, Abos, Playlists, Mag ich, Entdecken, Konto
+- Links ins Menü: Start, Abos, Suche, Kanäle, Später ansehen, Verlauf, Playlists, Mag ich, Entdecken, Konto
 - OK auf einem Video spielt es ab, **lange OK drücken** öffnet den Kanal
 - Im Player: OK zeigt die Steuerung, Zurück beendet
 - Konto → Höchste Videoqualität: Automatisch nimmt das Maximum, das der Fernseher kann
 
 ## Grenzen dieser ersten Version
 
-- „Später ansehen“ und der Verlauf sind über die offizielle API nicht abrufbar.
 - HDR-Varianten werden noch übersprungen; es läuft die SDR-Fassung in derselben Auflösung.
 - Keine Untertitel, kein SponsorBlock, keine Kommentare (geplant).
 - YouTube ändert seine Seiten öfter. Wenn Videos nicht mehr laden, hilft meist ein Update von
