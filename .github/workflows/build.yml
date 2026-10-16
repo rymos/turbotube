@@ -14,8 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      TURBOTUBE_OAUTH_CLIENT_ID: ${{ secrets.TURBOTUBE_OAUTH_CLIENT_ID }}
-      TURBOTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.TURBOTUBE_OAUTH_CLIENT_SECRET }}
+      TURBOTUBE_BUILD_NUMBER: ${{ github.run_number }}
       KEYSTORE_BASE64: ${{ secrets.TURBOTUBE_KEYSTORE_BASE64 }}
       TURBOTUBE_KEYSTORE_PASSWORD: ${{ secrets.TURBOTUBE_KEYSTORE_PASSWORD }}
       TURBOTUBE_KEY_ALIAS: ${{ secrets.TURBOTUBE_KEY_ALIAS }}
