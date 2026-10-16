@@ -1,34 +1,27 @@
 # Turbotube
 
-YouTube für den Fernseher, ohne Werbung und ohne Tracker. Gebaut für den **Google TV Streamer 4K**,
+YouTube für den Fernseher, ohne Werbung, mit SponsorBlock. Gebaut für den **Google TV Streamer 4K**,
 läuft aber auf jedem Android-TV- oder Google-TV-Gerät ab Android 8.
 
-- Videos ohne Werbeunterbrechungen, bis 4K (AV1, VP9 oder H.264, je nachdem, was das Gerät in Hardware kann)
-- Mit dem eigenen YouTube-Konto anmelden, ganz ohne Einrichtung: Startseite mit Empfehlungen, Abos,
-  Kanäle, Später ansehen, Verlauf, eigene Playlists, „Mag ich“
-- Eingebauter Update-Knopf (Konto → Nach Updates suchen), kein Browser nötig
-- Suche mit Vorschlägen, Kanäle, öffentliche Playlists, Entdecken (Live, Musik, Gaming, Filme, Podcasts)
-- Keine Analyse- oder Werbebibliotheken, keine Google-Play-Dienste
+Die App zeigt YouTubes eigene TV-Oberfläche (youtube.com/tv) und lädt darüber ein Skript, das die
+Werbung entfernt. Deshalb sieht alles exakt aus wie die YouTube-App, mit Anmeldung, Abos, Verlauf und
+allen Einstellungen.
+
+- Werbung entfernt, SponsorBlock, DeArrow, Wiedergabegeschwindigkeit (einstellbar in YouTube unter
+  Einstellungen)
+- Werbe- und Statistik-Adressen werden in der App gesperrt (siehe `TrackerBlocker`). Wiedergabezeit
+  und Verlauf gehen weiter an YouTube, sonst gäbe es keinen Verlauf und kein „Weiterschauen“.
+- Eingebaute Updates: **Zurück-Taste gedrückt halten** öffnet das Turbotube-Menü mit
+  „Nach Updates suchen“. Gibt es eine neue Version, erscheint das Menü beim Start von selbst.
 
 ## So funktioniert es
 
-| Teil | Woher die Daten kommen |
-| --- | --- |
-| Abspielen, Suche, Kanäle, Entdecken | [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), anonym, ohne Konto und ohne API-Schlüssel |
-| Neue Videos deiner Abos | die öffentlichen RSS-Feeds der Kanäle, anonym |
-| Alles mit Anmeldung (Start, Abos, Verlauf, Später ansehen, Playlists, „Mag ich“) | die interne Schnittstelle der YouTube-TV-App, mit deinem Konto |
-
-Die Anmeldung funktioniert wie bei SmartTube: Der Fernseher zeigt einen Code, du gibst ihn auf dem
-Handy unter **youtube.com/activate** ein. Turbotube nutzt dafür die Zugangsdaten der offiziellen
-YouTube-TV-App, die es beim Anmelden von youtube.com/tv liest. Niemand muss eine eigene Google-Cloud-
-Client-ID anlegen. Dein Passwort berührt die App nie, und was du schaust, wird nicht an dein Konto
-gemeldet (also auch kein Eintrag im YouTube-Verlauf).
-
-Das ist inoffiziell und verstößt streng genommen gegen YouTubes Nutzungsbedingungen. Wenn Google
-etwas ändert, kann die Anmeldung zeitweise ausfallen; Suche und Abspielen gehen dann trotzdem.
-
-Aufbau: `core/` ist reines Kotlin (YouTube-Zugriff, Anmeldung, Abo-Feed, Streamauswahl) und hat Tests,
-`app/` ist die Android-TV-Oberfläche mit Jetpack Compose for TV und Media3/ExoPlayer.
+- `MainActivity` zeigt youtube.com/tv in einem WebView mit dem Browser-Kennzeichen eines Samsung-TVs
+  und gibt die Fernbedienung weiter (Zurück wird als Escape an YouTube geschickt).
+- `TizenTubeScript` lädt das Skript (siehe Lizenz) in einer festen Version von npm (jsDelivr, ersatzweise unpkg),
+  prüft die SHA-256-Prüfsumme und speichert es auf dem Gerät. Es läuft, bevor YouTubes eigene
+  Skripte starten.
+- `core/` enthält die Update-Prüfung gegen die GitHub-Releases, mit Tests.
 
 ## Auf den Google TV Streamer bringen
 
@@ -44,7 +37,8 @@ Aufbau: `core/` ist reines Kotlin (YouTube-Zugriff, Anmeldung, Abo-Feed, Streama
 Alternative für Leute mit Computer: In den Entwickleroptionen „Debugging über WLAN“ einschalten, dann
 `adb connect <IP-des-Streamers>` und `adb install turbotube.apk`.
 
-**Updates** gehen danach direkt in der App: Konto → **Nach Updates suchen** → **Update installieren**.
+**Updates** gehen danach direkt in der App: Zurück-Taste gedrückt halten → **Nach Updates suchen** →
+**Update installieren**.
 Beim ersten Mal fragt Android, ob Turbotube Apps installieren darf. Das klappt nur, wenn alte und neue
 APK mit demselben Schlüssel signiert sind (siehe „Signaturschlüssel“ unten).
 
@@ -75,20 +69,18 @@ und als Secrets hinterlegen: `TURBOTUBE_KEYSTORE_BASE64` (die base64-Ausgabe),
 
 ## Bedienung
 
-- Links ins Menü: Start, Abos, Suche, Kanäle, Später ansehen, Verlauf, Playlists, Mag ich, Entdecken, Konto
-- OK auf einem Video spielt es ab, **lange OK drücken** öffnet den Kanal
-- Im Player: OK zeigt die Steuerung, Zurück beendet
-- Konto → Höchste Videoqualität: Automatisch nimmt das Maximum, das der Fernseher kann
+- Alles wie in der YouTube-App. Anmelden in YouTube unter „Anmelden“, dann den angezeigten Code auf dem Handy eingeben.
+- **Zurück gedrückt halten:** Turbotube-Menü (Updates, YouTube neu laden, Beenden)
 
-## Grenzen dieser ersten Version
+## Grenzen
 
-- HDR-Varianten werden noch übersprungen; es läuft die SDR-Fassung in derselben Auflösung.
-- Keine Untertitel, kein SponsorBlock, keine Kommentare (geplant).
-- YouTube ändert seine Seiten öfter. Wenn Videos nicht mehr laden, hilft meist ein Update von
-  NewPipeExtractor (`gradle/libs.versions.toml`).
+- Ob YouTube im WebView 4K anbietet, hängt vom Gerät ab; im schlimmsten Fall ist bei 1080p Schluss.
+- Casting vom Handy auf den Fernseher geht nicht.
+- Googles eigene Oberfläche lädt weiterhin Googles Skripte; gesperrt werden nur die bekannten
+  Werbe- und Statistik-Adressen.
 
 ## Lizenz
 
-GPL-3.0-or-later, wie NewPipeExtractor, auf dem Turbotube aufbaut. Der Umgang mit YouTubes
-Medienservern (`YouTubeStreamInterceptor`) folgt NewPipes `YoutubeHttpDataSource`.
+GPL-3.0-or-later. Das eingebundene Skript ist [TizenTube](https://github.com/reisxd/TizenTube)
+von Reis Can, lizenziert unter GPL-3.0; die App lädt es unverändert von npm (`@foxreis/tizentube`).
 Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google oder YouTube.

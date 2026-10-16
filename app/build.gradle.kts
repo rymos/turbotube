@@ -34,7 +34,7 @@ android {
         // (build-<n>). The update button compares against it.
         val build = secret("TURBOTUBE_BUILD_NUMBER").toIntOrNull() ?: 1
         versionCode = build
-        versionName = "0.2.$build"
+        versionName = "0.3.$build"
         buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 
@@ -84,23 +84,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.webkit)
 
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
-    implementation(libs.compose.icons)
     implementation(libs.tv.material)
-
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.exoplayer.dash)
-    implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.datasource.okhttp)
-    implementation(libs.media3.ui)
-
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-    implementation(libs.zxing.core)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
