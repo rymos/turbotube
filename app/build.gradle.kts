@@ -16,6 +16,10 @@ fun secret(name: String): String =
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // FilterChip and a few other Compose for TV parts are still marked experimental
+        optIn.add("androidx.tv.material3.ExperimentalTvMaterial3Api")
+    }
 }
 
 android {

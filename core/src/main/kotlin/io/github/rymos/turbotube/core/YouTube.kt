@@ -118,7 +118,7 @@ object YouTube {
     suspend fun channelFeed(channelId: String): List<Video> = io {
         val extractor = service.getFeedExtractor(youtubeChannelUrl(channelId))
         extractor.fetchPage()
-        extractor.initialPage.items.mapNotNull { (it as? StreamInfoItem)?.toVideo() }
+        extractor.initialPage.items.mapNotNull { it.toVideo() }
     }
 
     /** Everything needed to play a video, including the stream URLs. */

@@ -18,7 +18,7 @@ object StreamSelector {
         maxHeight: Int,
         canDecode: (mimeType: String, width: Int, height: Int, fps: Int) -> Boolean,
     ): VideoStream? = streams
-        .filter { it.isVideoOnly && it.deliveryMethod != DeliveryMethod.TORRENT }
+        .filter { it.isVideoOnly() && it.deliveryMethod != DeliveryMethod.TORRENT }
         .filter { it.height in 1..maxHeight }
         .filter { !isHdr(it.codec) }
         .filter { s -> mimeOf(s.codec)?.let { canDecode(it, s.width, s.height, s.fps) } == true }
@@ -45,10 +45,10 @@ object StreamSelector {
 
     /** Highest resolution muxed stream (video with sound), the fallback for old videos. */
     fun bestMuxed(streams: List<VideoStream>, maxHeight: Int): VideoStream? = streams
-        .filter { !it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+        .filter { !it.isVideoOnly() && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
         .filter { it.height <= maxHeight }
         .maxByOrNull { it.height }
-        ?: streams.filter { !it.isVideoOnly }.minByOrNull { it.height }
+        ?: streams.filter { !it.isVideoOnly() }.minByOrNull { it.height }
 
     /**
      * 10-bit HDR variants (VP9 profile 2, 10-bit AV1). Skipped for now: they need HDR output

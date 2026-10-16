@@ -31,7 +31,7 @@ class YouTubeStreamInterceptor(
         val movedRange = rangeAsParameter && rangeHeader != null &&
             request.url.queryParameter("range") == null
         if (movedRange) {
-            url.addQueryParameter("range", rangeHeader!!.removePrefix("bytes="))
+            url.addQueryParameter("range", rangeHeader.removePrefix("bytes="))
         }
 
         val original = request.url.toString()
