@@ -10,8 +10,9 @@ val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use(::load)
 }
+// Trimmed, because values pasted into GitHub secrets often carry a trailing line break
 fun secret(name: String): String =
-    localProperties.getProperty(name) ?: System.getenv(name) ?: ""
+    (localProperties.getProperty(name) ?: System.getenv(name) ?: "").trim()
 
 kotlin {
     jvmToolchain(21)
@@ -45,8 +46,9 @@ android {
             create("release") {
                 storeFile = file(keystore)
                 storePassword = secret("TURBOTUBE_KEYSTORE_PASSWORD")
-                keyAlias = secret("TURBOTUBE_KEY_ALIAS")
+                keyAlias = secret("TURBOTUBE_KEY_ALIAS").ifEmpty { "turbotube" }
                 keyPassword = secret("TURBOTUBE_KEY_PASSWORD")
+                    .ifEmpty { secret("TURBOTUBE_KEYSTORE_PASSWORD") }
             }
         }
     }
