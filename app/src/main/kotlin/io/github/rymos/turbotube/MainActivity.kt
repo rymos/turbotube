@@ -75,7 +75,6 @@ class MainActivity : ComponentActivity() {
                 ).show()
             } else {
                 inject(script)
-                adBlockLoaded = true
             }
             if (savedInstanceState == null) {
                 webView.loadUrl(startUrl(intent))
@@ -86,7 +85,10 @@ class MainActivity : ComponentActivity() {
 
             // Look for a new Turbotube version once per start and offer it right away
             container.updater.check(quiet = true)
-            if (container.updater.state is UpdateState.Available) menuOpen = true
+            if (container.updater.state is UpdateState.Available) {
+                menuOpen = true
+                checkAdBlock()
+            }
         }
     }
 
@@ -134,7 +136,11 @@ class MainActivity : ComponentActivity() {
 
     private fun inject(script: String) {
         // Guarded, so a page that gets the script twice doesn't patch itself twice
-        val guarded = "if(!window.__turbotube){window.__turbotube=true;\n$JSON_BRIDGE\n$script\n}"
+        // The bridge has to be in place before YouTube's own scripts run. The ad blocker itself
+        // must wait until YouTube's app object (_yttv) exists: it hooks the JSON parsers kept in
+        // there, and finds none when it runs too early, which let every ad through.
+        val guarded = "if(!window.__turbotube){window.__turbotube=true;\n$JSON_BRIDGE\n" +
+            "window.__ttRun=function(){\n$script\n};\n$WAIT_AND_RUN\n}"
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(webView, guarded, setOf("https://www.youtube.com"))
         } else {
@@ -177,7 +183,7 @@ class MainActivity : ComponentActivity() {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             backLongPressed = true
             menuOpen = !menuOpen
-            if (!menuOpen) webView.requestFocus()
+            if (menuOpen) checkAdBlock() else webView.requestFocus()
             return true
         }
         return super.onKeyLongPress(keyCode, event)
@@ -191,6 +197,11 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.onKeyUp(keyCode, event)
+    }
+
+    /** Asks the page whether the ad blocker really runs, for the status line in the menu. */
+    private fun checkAdBlock() {
+        webView.evaluateJavascript("!!window.__ttOk") { adBlockLoaded = it == "true" }
     }
 
     private fun closeMenu() {
@@ -248,6 +259,37 @@ class MainActivity : ComponentActivity() {
                   return this.__ttParsed;
                 },
               });
+            })();
+        """.trimIndent()
+
+        /**
+         * Starts the ad blocker once the page has loaded and YouTube's app object is filled, then
+         * keeps pointing YouTube's own JSON parsers at the patched one for a while, because some
+         * of its modules only load later.
+         */
+        private val WAIT_AND_RUN = """
+            (function () {
+              function ready() {
+                return document.readyState !== 'loading' &&
+                  window._yttv && Object.keys(window._yttv).length > 0;
+              }
+              function repatch() {
+                var y = window._yttv;
+                if (!y) return;
+                for (var k in y) {
+                  try {
+                    var j = y[k] && y[k].JSON;
+                    if (j && j.parse && j.parse !== JSON.parse) j.parse = JSON.parse;
+                  } catch (e) {}
+                }
+              }
+              var wait = setInterval(function () {
+                if (!ready()) return;
+                clearInterval(wait);
+                try { window.__ttRun(); window.__ttOk = true; } catch (e) { console.error('Turbotube: ad blocker failed', e); }
+                var n = 0;
+                var keep = setInterval(function () { repatch(); if (++n >= 60) clearInterval(keep); }, 1000);
+              }, 50);
             })();
         """.trimIndent()
 
