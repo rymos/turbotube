@@ -30,8 +30,8 @@ Aufbau: `core/` ist reines Kotlin (YouTube-Zugriff, Anmeldung, Abo-Feed, Streama
 2. **App „Downloader“** (von AFTVnews) aus dem Play Store installieren.
 3. **Unbekannte Apps erlauben:** Einstellungen → Apps → Sicherheit und Einschränkungen →
    Unbekannte Quellen → „Downloader“ einschalten.
-4. In Downloader den Link zur APK eintippen (unter *Releases* dieses Repositorys) und
-   „Installieren“ wählen.
+4. In Downloader diesen Link eintippen und „Installieren“ wählen:
+   `https://github.com/rymos/turbotube/releases/latest/download/turbotube.apk`
 5. Turbotube erscheint danach in der App-Leiste unter „Apps“.
 
 Alternative für Leute mit Computer: In den Entwickleroptionen „Debugging über WLAN“ einschalten, dann
