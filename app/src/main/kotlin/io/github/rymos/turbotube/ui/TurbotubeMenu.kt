@@ -29,7 +29,13 @@ import kotlinx.coroutines.launch
 
 /** Turbotube's own menu over YouTube: updates, reload, exit. Opened by holding Back. */
 @Composable
-fun TurbotubeMenu(updater: Updater, onReload: () -> Unit, onExit: () -> Unit, onClose: () -> Unit) {
+fun TurbotubeMenu(
+    updater: Updater,
+    adBlockLoaded: Boolean,
+    onReload: () -> Unit,
+    onExit: () -> Unit,
+    onClose: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val firstButton = remember { FocusRequester() }
     val state = updater.state
@@ -56,6 +62,11 @@ fun TurbotubeMenu(updater: Updater, onReload: () -> Unit, onExit: () -> Unit, on
                     statusText(state, updater.currentBuild),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFFDDDDDD),
+                )
+                Text(
+                    if (adBlockLoaded) "Werbeblocker: aktiv" else "Werbeblocker: nicht geladen, bitte Turbotube neu starten",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (adBlockLoaded) Color(0xFF8BD18B) else Color(0xFFFFB4A9),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (pending != null) {
