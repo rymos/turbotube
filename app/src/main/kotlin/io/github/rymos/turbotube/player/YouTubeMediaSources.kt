@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Turns NewPipe's stream lists into something ExoPlayer can play. */
 @OptIn(UnstableApi::class)
-class YouTubeMediaSources(client: OkHttpClient) {
+class YouTubeMediaSources(private val client: OkHttpClient) {
     private fun factory(rangeAsParameter: Boolean, requestNumber: Boolean) =
         OkHttpDataSource.Factory(
             client.newBuilder()
@@ -153,9 +153,9 @@ class YouTubeMediaSources(client: OkHttpClient) {
                     runCatching {
                         val video = info.getCapabilitiesForType(mime).videoCapabilities
                         if (fps > 0) {
-                            video.areSizeAndRateSupported(width, height, fps.toDouble())
+                            video?.areSizeAndRateSupported(width, height, fps.toDouble()) == true
                         } else {
-                            video.isSizeSupported(width, height)
+                            video?.isSizeSupported(width, height) == true
                         }
                     }.getOrDefault(false)
             }
