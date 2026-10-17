@@ -15,9 +15,10 @@ allen Einstellungen.
   Suche), Chat neben dem Stream und Werbefilter. Ein Twitch-Konto ist nicht nötig; wer will, verbindet
   es unter „Konto“ mit einem Code auf twitch.tv/activate und hat dann seine gefolgten Kanäle drin. Umschalten über das Turbotube-Menü: Zurück-Taste gedrückt halten →
   „Zu Twitch wechseln“. Die App startet dort, wo du zuletzt warst.
-- Eingebaute Updates: Ist eine neue Version da, liegt beim Start und nach jedem Wechsel zwischen
-  YouTube und Twitch ein Streifen mit „Jetzt installieren“ oben im Bild — ein Druck auf OK genügt,
-  „Später“ oder Zurück lässt ihn liegen. Darunter steht, was der neue Build mitbringt; der
+- Eingebaute Updates: Ist eine neue Version da, liegt beim Start, bei jedem Wechsel zwischen
+  YouTube und Twitch und immer wenn die App wieder in den Vordergrund kommt ein Streifen mit
+  „Jetzt installieren“ oben im Bild — ein Druck auf OK genügt, „Später“ oder Zurück lässt ihn
+  liegen. Solange die App offen bleibt, schaut sie alle 30 Minuten nach. Darunter steht, was der neue Build mitbringt; der
   Workflow schreibt die Commit-Titel als Release-Text mit. Sonst gibt es im Turbotube-Menü (Zurück-Taste gedrückt
   halten) weiter „Nach Updates suchen“.
 
