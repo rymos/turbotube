@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- For the built-in update button -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Turbotube's row on the TV home screen (tiles while the app is highlighted) -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
 
     <!-- A TV app: no touchscreen needed, leanback launcher required -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -38,6 +40,12 @@
                 <data android:host="youtube.com" />
                 <data android:host="m.youtube.com" />
                 <data android:host="youtu.be" />
+            </intent-filter>
+            <!-- A tile in Turbotube's home screen row opens the video it shows -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="turbotube" android:host="watch" />
             </intent-filter>
         </activity>
 
