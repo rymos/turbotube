@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -38,6 +39,8 @@ import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.web.PlaybackLimits
 import io.github.rymos.turbotube.web.TizenTubeScript
 import io.github.rymos.turbotube.web.TrackerBlocker
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -71,6 +74,9 @@ class MainActivity : ComponentActivity() {
     /** A build the viewer waved off is not offered again until the next start. */
     private var dismissedBuild = 0
     private var lastUpdateCheck = 0L
+
+    /** The resume that follows onCreate is the start itself, which already looked. */
+    private var appAlreadyResumed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -144,6 +150,12 @@ class MainActivity : ComponentActivity() {
 
             // Look for a new Turbotube version once per start and offer it right away
             offerUpdate(force = true)
+            // A TV leaves the app open for days: keep looking while it is in front, so a build
+            // that appears during the evening is not missed until the next restart.
+            while (isActive) {
+                delay(UPDATE_POLL_MS)
+                if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) offerUpdate(force = true)
+            }
         }
     }
 
@@ -295,6 +307,17 @@ class MainActivity : ComponentActivity() {
         webView.saveState(outState)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Back from the launcher or from another app: the activity was never destroyed, so
+        // onCreate does not run again and nothing would look for a new build.
+        if (!appAlreadyResumed) {
+            appAlreadyResumed = true
+            return
+        }
+        offerUpdate()
+    }
+
     override fun onPause() {
         super.onPause()
         CookieManager.getInstance().flush()
@@ -386,6 +409,8 @@ class MainActivity : ComponentActivity() {
     private fun closeMenu() {
         menuOpen = false
         restoreFocus()
+        // A build that was found while the menu was open belongs back on screen
+        offerUpdate()
     }
 
     /** Hands the remote back to whichever side is on screen. */
@@ -416,7 +441,14 @@ class MainActivity : ComponentActivity() {
         lastUpdateCheck = now
         lifecycleScope.launch {
             updater.check(quiet = true)
-            (updater.state as? UpdateState.Available)?.let { found -> showBanner(found.update) }
+            val found = updater.state as? UpdateState.Available
+            if (found != null) {
+                showBanner(found.update)
+            } else if (updater.state is UpdateState.Idle) {
+                // The look itself failed (no network yet, GitHub unreachable). Don't sit on that
+                // for a quarter of an hour: the next resume or switch may try again.
+                lastUpdateCheck = 0
+            }
         }
     }
 
@@ -475,6 +507,9 @@ class MainActivity : ComponentActivity() {
 
         /** A switch asks GitHub at most this often; one look per start always happens. */
         private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
+
+        /** While the app stays in front, look again this often. */
+        private const val UPDATE_POLL_MS = 30 * 60 * 1000L
 
         /**
          * The ad blocker edits YouTube's answers inside JSON.parse. In Android's WebView YouTube
