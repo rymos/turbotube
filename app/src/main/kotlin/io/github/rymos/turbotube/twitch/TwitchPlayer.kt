@@ -80,6 +80,13 @@ class TwitchPlayer(
 
     fun pause() = exoPlayer.pause()
 
+    /** Caps the picture at this many lines (1080, 720 …); null lets the player choose. */
+    fun setMaxHeight(height: Int?) {
+        val params = exoPlayer.trackSelectionParameters.buildUpon()
+        if (height == null) params.clearVideoSizeConstraints() else params.setMaxVideoSize(Int.MAX_VALUE, height)
+        exoPlayer.trackSelectionParameters = params.build()
+    }
+
     fun release() {
         loadJob?.cancel()
         backJob?.cancel()
