@@ -23,6 +23,9 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.update.Updater
 import kotlinx.coroutines.launch
@@ -65,6 +68,15 @@ fun TurbotubeMenu(
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFFDDDDDD),
                 )
+                // Makes a silent update check visible: if this line is missing, the app never
+                // got as far as asking GitHub.
+                if (updater.lastCheckAt > 0) {
+                    Text(
+                        "Zuletzt geprüft: " + SimpleDateFormat("HH:mm", Locale.GERMAN).format(Date(updater.lastCheckAt)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF8A8A8A),
+                    )
+                }
                 // The Twitch filter is part of the app itself, so it is always there
                 val filterOk = twitchMode || adBlockLoaded
                 Text(
