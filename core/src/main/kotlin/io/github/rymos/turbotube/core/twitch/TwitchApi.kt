@@ -190,7 +190,7 @@ class TwitchApi(private val http: OkHttpClient) {
 
     /**
      * The channels the signed-in account follows, live ones with their stream. [token] comes from
-     * [TwitchAuth]; it belongs to Twitch's Android app, so the request goes out as that app.
+     * [TwitchAuth]; it belongs to Twitch's TV app, so the request goes out as that app.
      */
     suspend fun followedChannels(token: String): List<TwitchChannel> {
         val result = ArrayList<TwitchChannel>()

@@ -28,7 +28,7 @@ data class TwitchAccount(val token: String, val login: String, val userId: Strin
 /**
  * Signs in with a code, like Twitch's own TV app: the TV shows a code, the viewer enters it on
  * twitch.tv/activate on their phone. The password never touches the TV. The token is the one
- * Twitch's Android app gets, without extra permissions.
+ * Twitch's TV app gets, without extra permissions.
  */
 class TwitchAuth(private val http: OkHttpClient) {
     /** Twitch expects the same device id on every call of one sign-in, like its app sends. */
@@ -112,8 +112,8 @@ class TwitchAuth(private val http: OkHttpClient) {
             .header("Cache-Control", "no-cache")
             .header("Pragma", "no-cache")
             .header("Client-Id", CLIENT_ID)
-            .header("Origin", "https://www.twitch.tv")
-            .header("Referer", "https://www.twitch.tv/")
+            .header("Origin", ORIGIN)
+            .header("Referer", "$ORIGIN/")
             .header("User-Agent", USER_AGENT)
             .header("X-Device-Id", deviceId)
             .post(form)
@@ -141,10 +141,14 @@ class TwitchAuth(private val http: OkHttpClient) {
     private fun JsonObject.string(key: String): String? = (get(key) as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
 
     companion object {
-        /** Twitch's Android app; tokens are bound to the client that asked for them. */
-        const val CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
+        /**
+         * Twitch's own TV app; tokens are bound to the client that asked for them. Since
+         * September 2026 Twitch refuses its Android app's id ("invalid client") for this sign-in.
+         */
+        const val CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa"
         const val USER_AGENT =
-            "Dalvik/2.1.0 (Linux; U; Android 14; Google TV Streamer Build/UTT3.240625.001) tv.twitch.android.app/25.3.0/2503006"
+            "Mozilla/5.0 (Linux; Android 14; Google TV Streamer) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+        private const val ORIGIN = "https://android.tv.twitch.tv"
 
         private val json = Json { ignoreUnknownKeys = true }
     }
