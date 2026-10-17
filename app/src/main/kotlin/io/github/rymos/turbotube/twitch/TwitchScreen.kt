@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -59,7 +60,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -441,8 +441,9 @@ private fun Hint(text: String) {
 @Composable
 private fun AccountPage(controller: TwitchController, enabled: Boolean) {
     val buttonFocus = remember { FocusRequester() }
+    // Narrow column: long lines are hard to read, and many TVs cut off the screen edges
     Column(
-        Modifier.fillMaxSize().padding(PagePadding),
+        Modifier.fillMaxHeight().widthIn(max = 760.dp).padding(start = PagePadding, top = PagePadding, end = 64.dp, bottom = PagePadding),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Konto", color = TwitchColors.Text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -494,10 +495,7 @@ private fun AccountPage(controller: TwitchController, enabled: Boolean) {
                     onClick = { if (account != null) controller.signOut() else controller.startSignIn() },
                     enabled = state !is SignIn.Starting,
                     modifier = Modifier.focusProperties { canFocus = enabled }.focusRequester(buttonFocus),
-                    colors = ButtonDefaults.colors(
-                        containerColor = if (account != null) TwitchColors.SurfaceHigh else TwitchColors.Purple,
-                        contentColor = Color.White,
-                    ),
+                    colors = twitchButtonColors(primary = account == null),
                 ) {
                     Text(
                         when {
