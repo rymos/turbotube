@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package io.github.rymos.turbotube.twitch
 
 import android.os.Handler
@@ -54,6 +56,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -142,7 +145,11 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                         player = twitchPlayer.exoPlayer
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
+                update = { it.resizeMode = controller.pictureFit.resizeMode() },
+                // Some TVs cut the edges off (overscan); "Verkleinert" keeps the picture inside
+                modifier = Modifier.fillMaxSize().then(
+                    if (controller.pictureFit == PictureFit.Shrink) Modifier.padding(horizontal = 40.dp, vertical = 24.dp) else Modifier,
+                ),
             )
 
             when (val current = state) {
@@ -208,16 +215,26 @@ private fun InfoBar(
             }
         }
         if (controlsVisible) {
-            val following = controller.favorites.contains(channel.login)
+            val onTwitch = channel.login in controller.accountFollows
+            val following = onTwitch || controller.favorites.contains(channel.login)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = { controller.favorites.toggle(channel.login) },
+                    // Followed with the Twitch account: that list is changed on Twitch itself
+                    onClick = { if (!onTwitch) controller.favorites.toggle(channel.login) },
                     modifier = Modifier.focusProperties { canFocus = active }.focusRequester(firstButton),
                     colors = ButtonDefaults.colors(
                         containerColor = if (following) TwitchColors.SurfaceHigh else TwitchColors.Purple,
                         contentColor = Color.White,
                     ),
-                ) { Text(if (following) "Entfolgen" else "♥  Folgen") }
+                ) {
+                    Text(
+                        when {
+                            onTwitch -> "♥  Gefolgt (Twitch)"
+                            following -> "Entfolgen"
+                            else -> "♥  Folgen"
+                        },
+                    )
+                }
                 Button(
                     onClick = { controller.toggleChat() },
                     modifier = Modifier.focusProperties { canFocus = active },
@@ -228,10 +245,15 @@ private fun InfoBar(
                     modifier = Modifier.focusProperties { canFocus = active },
                     colors = ButtonDefaults.colors(containerColor = TwitchColors.SurfaceHigh, contentColor = Color.White),
                 ) { Text("Qualität: " + (controller.maxHeight?.let { "${it}p" } ?: "Auto")) }
+                Button(
+                    onClick = { controller.nextPictureFit() },
+                    modifier = Modifier.focusProperties { canFocus = active },
+                    colors = ButtonDefaults.colors(containerColor = TwitchColors.SurfaceHigh, contentColor = Color.White),
+                ) { Text("Bild: " + controller.pictureFit.label) }
             }
             Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream.", color = TwitchColors.TextMuted, fontSize = 12.sp)
         } else {
-            Text("OK: Folgen, Chat, Qualität", color = TwitchColors.TextMuted, fontSize = 12.sp)
+            Text("OK: Folgen, Chat, Qualität, Bildgröße", color = TwitchColors.TextMuted, fontSize = 12.sp)
         }
     }
 }
@@ -299,6 +321,12 @@ private fun ChatPanel(controller: TwitchController, login: String) {
             }
         }
     }
+}
+
+private fun PictureFit.resizeMode(): Int = when (this) {
+    PictureFit.Fit, PictureFit.Shrink -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    PictureFit.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+    PictureFit.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 }
 
 /** Twitch gives people without a chosen colour one of a few defaults. */

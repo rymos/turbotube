@@ -1,6 +1,8 @@
 package io.github.rymos.turbotube.twitch
 
 import androidx.compose.animation.core.animateDpAsState
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +50,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +58,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -63,6 +69,9 @@ import androidx.tv.material3.darkColorScheme
 import io.github.rymos.turbotube.core.twitch.TwitchCategory
 import io.github.rymos.turbotube.core.twitch.TwitchChannel
 import io.github.rymos.turbotube.ui.RemoteImage
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 
 private val RowCardWidth = 240.dp
 private val PagePadding = 32.dp
@@ -103,6 +112,7 @@ fun TwitchScreen(controller: TwitchController) {
                             if (open == null) BrowsePage(controller, browsing) else CategoryPage(controller, open, browsing)
                         }
                         TwitchPage.Search -> SearchPage(controller, browsing)
+                        TwitchPage.Account -> AccountPage(controller, browsing)
                     }
                 }
             }
@@ -164,6 +174,7 @@ private fun TwitchPage.icon(): ImageVector = when (this) {
     TwitchPage.Following -> Icons.Filled.Favorite
     TwitchPage.Browse -> Icons.Filled.Menu
     TwitchPage.Search -> Icons.Filled.Search
+    TwitchPage.Account -> Icons.Filled.Person
 }
 
 @Composable
@@ -276,7 +287,13 @@ private fun FollowingPage(controller: TwitchController, enabled: Boolean) {
         is Load.Failed -> Hint(load.message)
         is Load.Done -> if (load.value.isEmpty()) {
             PageTitle("Folge ich")
-            Hint("Du folgst noch niemandem. Öffne einen Stream, drücke OK und wähle „Folgen“. Gespeichert wird nur auf diesem Fernseher.")
+            Hint(
+                if (controller.account == null) {
+                    "Du folgst noch niemandem. Verbinde unter „Konto“ dein Twitch-Konto, oder öffne einen Stream, drücke OK und wähle „Folgen“."
+                } else {
+                    "Dein Twitch-Konto folgt noch niemandem. Öffne einen Stream, drücke OK und wähle „Folgen“."
+                },
+            )
         } else {
             val live = load.value.filter { it.live }
             val offline = load.value.filter { !it.live }
@@ -418,4 +435,90 @@ private fun Hint(text: String) {
         fontSize = 16.sp,
         modifier = Modifier.padding(start = PagePadding, top = 72.dp, end = PagePadding),
     )
+}
+
+/** Connect a Twitch account: a code for twitch.tv/activate, or who is connected. */
+@Composable
+private fun AccountPage(controller: TwitchController, enabled: Boolean) {
+    val buttonFocus = remember { FocusRequester() }
+    Column(
+        Modifier.fillMaxSize().padding(PagePadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("Konto", color = TwitchColors.Text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        val account = controller.account
+        when (val state = controller.signIn) {
+            is SignIn.WaitingForCode -> Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                QrCode(state.login.verificationUri, Modifier.size(200.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("So verbindest du dein Twitch-Konto:", color = TwitchColors.Text, fontSize = 18.sp)
+                    Text(
+                        "1. Scanne den QR-Code mit dem Handy, oder öffne twitch.tv/activate.\n" +
+                            "2. Melde dich dort bei Twitch an, falls nötig.\n" +
+                            "3. Gib diesen Code ein und tippe auf „Aktivieren“:",
+                        color = TwitchColors.TextMuted,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                    )
+                    Text(
+                        state.login.userCode,
+                        color = Color.White,
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(TwitchColors.SurfaceHigh, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                    )
+                    Text("Der Fernseher wartet und meldet sich von selbst an. Zurück bricht ab.", color = TwitchColors.TextMuted, fontSize = 13.sp)
+                }
+            }
+            else -> {
+                if (account != null) {
+                    Text("Verbunden als ${account.login}", color = TwitchColors.Text, fontSize = 18.sp)
+                    Text(
+                        "Unter „Folge ich“ und auf der Startseite stehen jetzt die Kanäle, denen du auf Twitch folgst. " +
+                            "Streams laufen weiterhin ohne Anmeldung, das Konto liest nur deine Liste.",
+                        color = TwitchColors.TextMuted,
+                        fontSize = 15.sp,
+                    )
+                } else {
+                    Text(
+                        "Verbinde dein Twitch-Konto, damit die Kanäle, denen du folgst, hier auftauchen. " +
+                            "Dein Passwort gibst du nur auf der Twitch-Seite ein, nicht am Fernseher.",
+                        color = TwitchColors.TextMuted,
+                        fontSize = 15.sp,
+                    )
+                }
+                (state as? SignIn.Failed)?.let { Text(it.message, color = Color(0xFFFFB4A9), fontSize = 15.sp) }
+                Button(
+                    onClick = { if (account != null) controller.signOut() else controller.startSignIn() },
+                    enabled = state !is SignIn.Starting,
+                    modifier = Modifier.focusProperties { canFocus = enabled }.focusRequester(buttonFocus),
+                    colors = ButtonDefaults.colors(
+                        containerColor = if (account != null) TwitchColors.SurfaceHigh else TwitchColors.Purple,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Text(
+                        when {
+                            state is SignIn.Starting -> "Einen Moment …"
+                            account != null -> "Abmelden"
+                            else -> "Mit Twitch verbinden"
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QrCode(text: String, modifier: Modifier) {
+    val image = remember(text) {
+        val size = 400
+        val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 1))
+        val pixels = IntArray(size * size) { if (matrix[it % size, it / size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
+        Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888).asImageBitmap()
+    }
+    Image(image, contentDescription = "QR-Code für twitch.tv/activate", modifier = modifier)
 }
