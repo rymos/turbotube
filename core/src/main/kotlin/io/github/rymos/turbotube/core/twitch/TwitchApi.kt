@@ -188,7 +188,30 @@ class TwitchApi(private val http: OkHttpClient) {
             .build().toString()
     }
 
-    private suspend fun query(text: String, vararg variables: Pair<String, Any>): JsonElement {
+    /**
+     * The channels the signed-in account follows, live ones with their stream. [token] comes from
+     * [TwitchAuth]; it belongs to Twitch's Android app, so the request goes out as that app.
+     */
+    suspend fun followedChannels(token: String): List<TwitchChannel> {
+        val result = ArrayList<TwitchChannel>()
+        var after: String? = null
+        repeat(MAX_FOLLOW_PAGES) {
+            val page = query(
+                "query(\$after: Cursor) { currentUser { follows(first: 100, after: \$after) { " +
+                    "edges { cursor node { $USER_FIELDS } } pageInfo { hasNextPage } } } }",
+                *listOfNotNull(after?.let { "after" to it }).toTypedArray(),
+                token = token,
+            ).path("currentUser", "follows")
+            val edges = page.path("edges").array()
+            result += edges.mapNotNull { user(it.path("node")) }
+            val more = (page.path("pageInfo").path("hasNextPage") as? JsonPrimitive)?.contentOrNull == "true"
+            after = edges.lastOrNull()?.string("cursor")
+            if (!more || after == null) return result
+        }
+        return result
+    }
+
+    private suspend fun query(text: String, vararg variables: Pair<String, Any>, token: String? = null): JsonElement {
         val body = buildJsonObject {
             put("query", text)
             putJsonObject("variables") {
@@ -201,7 +224,7 @@ class TwitchApi(private val http: OkHttpClient) {
                 }
             }
         }
-        val answer = post(body)
+        val answer = post(body, token)
         val error = answer.path("errors").array().firstOrNull()?.string("message")
         val data = answer.path("data")
         // Partial answers carry data with every asked-for field null; that is a failure too
@@ -211,14 +234,19 @@ class TwitchApi(private val http: OkHttpClient) {
         return data
     }
 
-    private suspend fun post(body: JsonObject): JsonElement = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
+    private suspend fun post(body: JsonObject, token: String? = null): JsonElement = withContext(Dispatchers.IO) {
+        val builder = Request.Builder()
             .url("https://gql.twitch.tv/gql")
-            .header("Client-ID", CLIENT_ID)
             .header("X-Device-Id", deviceId)
-            .header("User-Agent", USER_AGENT)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+        if (token == null) {
+            builder.header("Client-ID", CLIENT_ID).header("User-Agent", USER_AGENT)
+        } else {
+            builder.header("Client-ID", TwitchAuth.CLIENT_ID)
+                .header("User-Agent", TwitchAuth.USER_AGENT)
+                .header("Authorization", "OAuth $token")
+        }
+        val request = builder.build()
         http.newCall(request).execute().use { response ->
             val text = response.body.string()
             if (!response.isSuccessful && text.isBlank()) {
@@ -287,6 +315,7 @@ class TwitchApi(private val http: OkHttpClient) {
         private val json = Json { ignoreUnknownKeys = true }
 
         private const val FALLBACK_CATEGORIES = 6
+        private const val MAX_FOLLOW_PAGES = 5
         private const val STREAM_FIELDS = "title viewersCount createdAt previewImageURL(width: 640, height: 360) " +
             "game { displayName } broadcaster { login displayName profileImageURL(width: 150) }"
         private const val USER_FIELDS = "login displayName profileImageURL(width: 150) stream { title " +

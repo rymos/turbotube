@@ -56,7 +56,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as TurbotubeApp).container
         webView = createWebView()
-        twitch = TwitchController(container.twitchApi, container.favorites, container.http, lifecycleScope, this)
+        twitch = TwitchController(
+            container.twitchApi, container.favorites, container.twitchAuth, container.http, lifecycleScope, this,
+        )
         // Opens where it was left, except for a YouTube link sent to the TV
         twitchMode = intent?.data == null && prefs().getBoolean(KEY_TWITCH, false)
         if (twitchMode) {

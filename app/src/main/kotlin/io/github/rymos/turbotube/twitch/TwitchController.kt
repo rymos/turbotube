@@ -6,7 +6,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
+import io.github.rymos.turbotube.core.twitch.DeviceLogin
+import io.github.rymos.turbotube.core.twitch.TwitchAccount
 import io.github.rymos.turbotube.core.twitch.TwitchApi
+import io.github.rymos.turbotube.core.twitch.TwitchAuth
+import io.github.rymos.turbotube.core.twitch.TwitchException
 import io.github.rymos.turbotube.core.twitch.TwitchCategory
 import io.github.rymos.turbotube.core.twitch.TwitchChannel
 import kotlinx.coroutines.CancellationException
@@ -30,6 +34,23 @@ enum class TwitchPage(val label: String) {
     Following("Folge ich"),
     Browse("Durchsuchen"),
     Search("Suche"),
+    Account("Konto"),
+}
+
+/** How the stream fills the screen. */
+enum class PictureFit(val label: String) {
+    Fit("Einpassen"),
+    Shrink("Verkleinert"),
+    Stretch("Gestreckt"),
+    Zoom("Zoom"),
+}
+
+/** Where the sign-in stands. */
+sealed interface SignIn {
+    data object Idle : SignIn
+    data object Starting : SignIn
+    data class WaitingForCode(val login: DeviceLogin) : SignIn
+    data class Failed(val message: String) : SignIn
 }
 
 /** The start page: rows like on Twitch, each filled from one list. */
@@ -44,6 +65,7 @@ data class HomeRows(
 class TwitchController(
     val api: TwitchApi,
     val favorites: Favorites,
+    private val auth: TwitchAuth,
     val http: OkHttpClient,
     private val scope: CoroutineScope,
     context: Context,
@@ -72,6 +94,25 @@ class TwitchController(
 
     var chatVisible by mutableStateOf(prefs.getBoolean(KEY_CHAT, true))
         private set
+
+    var pictureFit by mutableStateOf(
+        PictureFit.entries.firstOrNull { it.name == prefs.getString(KEY_FIT, null) } ?: PictureFit.Fit,
+    )
+        private set
+
+    /** The connected Twitch account; its followed channels show up next to the ones saved here. */
+    var account by mutableStateOf<TwitchAccount?>(
+        prefs.getString(KEY_TOKEN, null)?.let { TwitchAccount(it, prefs.getString(KEY_LOGIN, null).orEmpty(), "") },
+    )
+        private set
+    var signIn by mutableStateOf<SignIn>(SignIn.Idle)
+        private set
+
+    /** Logins the account follows on Twitch, for the Follow button. */
+    var accountFollows by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    private var signInJob: Job? = null
 
     /** Highest picture height, or null for automatic. */
     var maxHeight by mutableStateOf(prefs.getInt(KEY_QUALITY, 0).takeIf { it > 0 })
@@ -111,8 +152,9 @@ class TwitchController(
                 }
                 TwitchPage.Following -> {
                     if (following !is Load.Done) following = Load.Loading
-                    following = load { api.channels(favorites.logins) }
+                    following = load { allFollowed() }
                 }
+                TwitchPage.Account -> Unit
                 TwitchPage.Browse -> {
                     val open = category
                     if (open != null) {
@@ -152,6 +194,52 @@ class TwitchController(
         playing = channel
     }
 
+    /** Shows a code to enter on twitch.tv/activate and waits for it. */
+    fun startSignIn() {
+        signInJob?.cancel()
+        signInJob = scope.launch {
+            signIn = SignIn.Starting
+            try {
+                val code = auth.start()
+                signIn = SignIn.WaitingForCode(code)
+                val signedIn = auth.await(code)
+                if (signedIn == null) {
+                    signIn = SignIn.Failed("Der Code ist abgelaufen. Bitte nochmal versuchen.")
+                } else {
+                    account = signedIn
+                    prefs.edit().putString(KEY_TOKEN, signedIn.token).putString(KEY_LOGIN, signedIn.login).apply()
+                    signIn = SignIn.Idle
+                    home = Load.Loading
+                    following = Load.Loading
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                signIn = SignIn.Failed(e.message ?: "Anmeldung fehlgeschlagen.")
+            }
+        }
+    }
+
+    fun cancelSignIn() {
+        signInJob?.cancel()
+        signIn = SignIn.Idle
+    }
+
+    fun signOut() {
+        account = null
+        accountFollows = emptySet()
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_LOGIN).apply()
+        home = Load.Loading
+        following = Load.Loading
+    }
+
+    fun nextPictureFit() {
+        pictureFit = PictureFit.entries[(pictureFit.ordinal + 1) % PictureFit.entries.size]
+        prefs.edit().putString(KEY_FIT, pictureFit.name).apply()
+    }
+
+    fun isFollowed(login: String) = favorites.contains(login) || login in accountFollows
+
     fun toggleChat() {
         chatVisible = !chatVisible
         prefs.edit().putBoolean(KEY_CHAT, chatVisible).apply()
@@ -168,6 +256,10 @@ class TwitchController(
     fun back(): Boolean = when {
         playing != null && playerPanelOpen -> {
             playerPanelOpen = false
+            true
+        }
+        page == TwitchPage.Account && signIn is SignIn.WaitingForCode && playing == null -> {
+            cancelSignIn()
             true
         }
         playing != null -> {
@@ -189,13 +281,38 @@ class TwitchController(
     }
 
     private suspend fun loadHome(): HomeRows = coroutineScope {
-        val followed = async { runCatching { api.channels(favorites.logins).filter { it.live } }.getOrDefault(emptyList()) }
+        val followed = async { runCatching { allFollowed().filter { it.live } }.getOrDefault(emptyList()) }
         val popular = async { api.topStreams() }
         val tops = async { runCatching { api.topCategories() }.getOrDefault(emptyList()) }
         val byCategory = tops.await().take(CATEGORY_ROWS).map { category ->
             async { category to runCatching { api.categoryStreams(category.name) }.getOrDefault(emptyList()) }
         }.awaitAll().filter { it.second.isNotEmpty() }
         HomeRows(followed.await(), popular.await(), tops.await(), byCategory)
+    }
+
+    /**
+     * The channels saved here plus the ones the Twitch account follows. If Twitch refuses the
+     * account (signed out elsewhere), the saved ones still show and the error says why.
+     */
+    private suspend fun allFollowed(): List<TwitchChannel> = coroutineScope {
+        val local = async { api.channels(favorites.logins) }
+        val token = account?.token
+        val remote = if (token == null) {
+            emptyList()
+        } else {
+            try {
+                api.followedChannels(token).also { list -> accountFollows = list.map { it.login }.toSet() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Twitch no longer accepts the token: sign out, so the Account page offers a new code
+                val check = runCatching { auth.validate(token) }
+                if (check.isSuccess && check.getOrNull() == null) signOut()
+                throw TwitchException("Gefolgte Kanäle aus dem Twitch-Konto lassen sich nicht laden: ${e.message}")
+            }
+        }
+        // Live first, then in the order Twitch or this TV has them
+        (local.await() + remote).distinctBy { it.login }.sortedByDescending { it.live }
     }
 
     private suspend fun <T> load(block: suspend () -> T): Load<T> = try {
@@ -209,6 +326,9 @@ class TwitchController(
     private companion object {
         const val KEY_CHAT = "chat"
         const val KEY_QUALITY = "quality"
+        const val KEY_FIT = "fit"
+        const val KEY_TOKEN = "token"
+        const val KEY_LOGIN = "login"
         const val CATEGORY_ROWS = 4
     }
 }
