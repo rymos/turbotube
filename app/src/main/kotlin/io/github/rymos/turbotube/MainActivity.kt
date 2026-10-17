@@ -27,9 +27,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import io.github.rymos.turbotube.core.update.AppUpdate
 import io.github.rymos.turbotube.twitch.TwitchController
 import io.github.rymos.turbotube.twitch.TwitchScreen
 import io.github.rymos.turbotube.ui.TurbotubeMenu
+import io.github.rymos.turbotube.ui.UpdateBanner
 import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.web.PlaybackLimits
 import io.github.rymos.turbotube.web.TizenTubeScript
@@ -52,6 +54,13 @@ class MainActivity : ComponentActivity() {
     private var scriptReady = false
     private var youTubeStarted = false
 
+    /** The update strip at the top; shown on start and on every switch while a build is waiting. */
+    private var bannerVisible by mutableStateOf(false)
+
+    /** A build the viewer waved off is not offered again until the next start. */
+    private var dismissedBuild = 0
+    private var lastUpdateCheck = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as TurbotubeApp).container
@@ -71,6 +80,20 @@ class MainActivity : ComponentActivity() {
             Box(Modifier.fillMaxSize()) {
                 AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
                 if (twitchMode) TwitchScreen(twitch)
+                if (bannerVisible && !menuOpen) {
+                    UpdateBanner(
+                        state = container.updater.state,
+                        currentBuild = container.updater.currentBuild,
+                        onInstall = { update -> lifecycleScope.launch { container.updater.install(update) } },
+                        onRetry = {
+                            val updater = container.updater
+                            lifecycleScope.launch {
+                                updater.lastFound?.let { pending -> updater.install(pending) } ?: updater.check()
+                            }
+                        },
+                        onClose = { dismissBanner() },
+                    )
+                }
                 if (menuOpen) {
                     TurbotubeMenu(
                         updater = container.updater,
@@ -105,8 +128,7 @@ class MainActivity : ComponentActivity() {
             }
 
             // Look for a new Turbotube version once per start and offer it right away
-            container.updater.check(quiet = true)
-            if (container.updater.state is UpdateState.Available) openMenu()
+            offerUpdate(force = true)
         }
     }
 
@@ -222,6 +244,9 @@ class MainActivity : ComponentActivity() {
             if (scriptReady) startYouTube(null)
             webView.requestFocus()
         }
+        // A new build is offered again after every switch, even if it was waved off before
+        dismissedBuild = 0
+        offerUpdate()
     }
 
     private fun prefs() = getSharedPreferences("turbotube", MODE_PRIVATE)
@@ -275,6 +300,7 @@ class MainActivity : ComponentActivity() {
             if (!backLongPressed && !event.isCanceled) {
                 when {
                     menuOpen -> closeMenu()
+                    bannerVisible -> dismissBanner()
                     twitchMode -> if (!twitch.back()) {
                         Toast.makeText(this, "Zurück gedrückt halten öffnet das Turbotube-Menü.", Toast.LENGTH_SHORT).show()
                     }
@@ -295,6 +321,8 @@ class MainActivity : ComponentActivity() {
     // behind the menu as soon as the focused menu button changes.
     // On the Twitch side its lists are taken out of the focus order the same way.
     private fun openMenu() {
+        // The menu shows the update itself; the strip would only sit in the way
+        bannerVisible = false
         webView.isFocusable = false
         twitch.interactive = false
         menuOpen = true
@@ -303,6 +331,11 @@ class MainActivity : ComponentActivity() {
 
     private fun closeMenu() {
         menuOpen = false
+        restoreFocus()
+    }
+
+    /** Hands the remote back to whichever side is on screen. */
+    private fun restoreFocus() {
         twitch.interactive = true
         if (twitchMode) {
             twitch.restoreFocus()
@@ -310,6 +343,42 @@ class MainActivity : ComponentActivity() {
             webView.isFocusable = true
             webView.requestFocus()
         }
+    }
+
+    /**
+     * Shows the update strip. [force] checks GitHub even when the last look was a moment ago;
+     * otherwise a switch only asks every [CHECK_INTERVAL_MS], and an update already found is
+     * shown straight away.
+     */
+    private fun offerUpdate(force: Boolean = false) {
+        val updater = (application as TurbotubeApp).container.updater
+        val known = (updater.state as? UpdateState.Available)?.update ?: updater.lastFound
+        if (known != null) {
+            showBanner(known)
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (!force && now - lastUpdateCheck < CHECK_INTERVAL_MS) return
+        lastUpdateCheck = now
+        lifecycleScope.launch {
+            updater.check(quiet = true)
+            (updater.state as? UpdateState.Available)?.let { found -> showBanner(found.update) }
+        }
+    }
+
+    private fun showBanner(update: AppUpdate) {
+        if (update.buildNumber == dismissedBuild) return
+        bannerVisible = true
+        // While the strip is up the remote belongs to it, not to YouTube or Twitch behind it
+        webView.isFocusable = false
+        twitch.interactive = false
+    }
+
+    private fun dismissBanner() {
+        dismissedBuild = ((application as TurbotubeApp).container.updater.state as? UpdateState.Available)
+            ?.update?.buildNumber ?: dismissedBuild
+        bannerVisible = false
+        if (!menuOpen) restoreFocus()
     }
 
     private fun sendEscape() {
@@ -349,6 +418,9 @@ class MainActivity : ComponentActivity() {
         private val GOOGLE_DOMAINS = Regex("""(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$""")
 
         private const val PAGE_WIDTH = 1920
+
+        /** A switch asks GitHub at most this often; one look per start always happens. */
+        private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
 
         /**
          * The ad blocker edits YouTube's answers inside JSON.parse. In Android's WebView YouTube
