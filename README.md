@@ -18,10 +18,13 @@ allen Einstellungen.
 
 - `MainActivity` zeigt youtube.com/tv in einem WebView mit dem Browser-Kennzeichen eines Samsung-TVs
   und gibt die Fernbedienung weiter (Zurück wird als Escape an YouTube geschickt).
-- `TizenTubeScript` lädt das Skript (siehe Lizenz) in einer festen Version von npm (jsDelivr, ersatzweise unpkg),
-  prüft die SHA-256-Prüfsumme und speichert es auf dem Gerät. Es läuft, bevor YouTubes eigene
-  Skripte starten.
-- `core/` enthält die Update-Prüfung gegen die GitHub-Releases, mit Tests.
+- `TizenTubeScript` liefert das Skript in einer festen Version mit der APK aus (der Workflow lädt es
+  von npm, prüft die SHA-256-Prüfsumme und legt es unter `app/src/main/assets` ab). Die App prüft die
+  Kopie erneut und legt sie auf dem Gerät ab; ohne mitgeliefertes Skript lädt sie es aus dem eigenen
+  Release, erst danach von npm. Es läuft, bevor YouTubes eigene Skripte starten.
+- `core/` enthält die Update-Prüfung gegen die GitHub-Releases, mit Tests. Sie liest die letzten
+  Releases und nimmt den höchsten Build — „das neueste Release“ wäre nicht dasselbe.
+- Links, die nicht zu YouTube gehören, öffnet die App im System-Browser statt im WebView.
 
 ## Auf den Google TV Streamer bringen
 
@@ -54,6 +57,16 @@ Lokal: JDK 21 und das Android SDK installieren, dann
 ./gradlew :core:test :app:assembleRelease
 ```
 
+Wer das Werbe-Skript lokal mitbauen will, legt es vorher dorthin (der Workflow macht genau das):
+
+```sh
+mkdir -p app/src/main/assets
+curl -fsSL -o app/src/main/assets/tizentube-1.15.1.js \
+  https://cdn.jsdelivr.net/npm/@foxreis/tizentube@1.15.1/dist/userScript.js
+```
+
+Ohne die Datei baut die App trotzdem; sie lädt das Skript dann beim ersten Start aus dem Netz.
+
 ### Signaturschlüssel
 
 Ohne eigenen Schlüssel wird die Release-APK mit dem Debug-Schlüssel des jeweiligen Rechners signiert.
@@ -66,6 +79,13 @@ base64 -w0 turbotube.jks
 
 und als Secrets hinterlegen: `TURBOTUBE_KEYSTORE_BASE64` (die base64-Ausgabe),
 `TURBOTUBE_KEYSTORE_PASSWORD`, `TURBOTUBE_KEY_ALIAS` (`turbotube`), `TURBOTUBE_KEY_PASSWORD`.
+
+Ein Build für `main` **bricht ab**, wenn kein Schlüssel hinterlegt ist, statt eine debug-signierte
+APK zu veröffentlichen — die ließe sich nie wieder updaten. Ein lokaler Build ohne Schlüssel geht
+weiterhin und ist dann debug-signiert (nur zum Ausprobieren).
+
+Releases tragen immer den Tag `build-<n>`. Ein Release mit einem anderen Tag (`v1.0` o. ä.) wird vom
+Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
 
 ## Bedienung
 
@@ -82,5 +102,6 @@ und als Secrets hinterlegen: `TURBOTUBE_KEYSTORE_BASE64` (die base64-Ausgabe),
 ## Lizenz
 
 GPL-3.0-or-later. Das eingebundene Skript ist [TizenTube](https://github.com/reisxd/TizenTube)
-von Reis Can, lizenziert unter GPL-3.0; die App lädt es unverändert von npm (`@foxreis/tizentube`).
-Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google oder YouTube.
+von Reis Can, lizenziert unter GPL-3.0; die App liefert es unverändert mit (Version und Prüfsumme
+stehen in `TizenTubeScript.kt`). Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google
+oder YouTube.
