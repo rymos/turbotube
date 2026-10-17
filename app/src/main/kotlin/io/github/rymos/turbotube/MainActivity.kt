@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -55,11 +56,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as TurbotubeApp).container
         webView = createWebView()
-        twitch = TwitchController(container.twitchApi, container.favorites, lifecycleScope)
+        twitch = TwitchController(container.twitchApi, container.favorites, container.http, lifecycleScope, this)
         // Opens where it was left, except for a YouTube link sent to the TV
         twitchMode = intent?.data == null && prefs().getBoolean(KEY_TWITCH, false)
         if (twitchMode) {
             webView.isFocusable = false
+            webView.visibility = View.INVISIBLE
             webView.onPause()
         }
 
@@ -208,8 +210,11 @@ class MainActivity : ComponentActivity() {
             webView.evaluateJavascript(PAUSE_VIDEOS, null)
             webView.onPause()
             webView.isFocusable = false
+            // YouTube's video sits on its own layer above everything else; hidden, it goes away
+            webView.visibility = View.INVISIBLE
             twitch.interactive = true
         } else {
+            webView.visibility = View.VISIBLE
             webView.onResume()
             webView.isFocusable = true
             if (scriptReady) startYouTube(null)

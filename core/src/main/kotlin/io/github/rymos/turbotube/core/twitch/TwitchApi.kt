@@ -1,6 +1,9 @@
 package io.github.rymos.turbotube.core.twitch
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -32,6 +35,8 @@ data class TwitchChannel(
     val viewers: Int = 0,
     val game: String = "",
     val previewUrl: String? = null,
+    /** When the stream went live, ISO 8601, for the "live for 2:13" line. */
+    val startedAt: String? = null,
 )
 
 data class TwitchCategory(
@@ -55,8 +60,20 @@ class TwitchApi(private val http: OkHttpClient) {
     private val deviceId = (1..32).map { DEVICE_ID_CHARS[Random.nextInt(DEVICE_ID_CHARS.length)] }.joinToString("")
 
     suspend fun topStreams(): List<TwitchChannel> {
-        val data = query("query { streams(first: $PAGE) { edges { node { $STREAM_FIELDS } } } }")
-        return data.path("streams", "edges").array().mapNotNull { stream(it.path("node")) }
+        val direct = runCatching {
+            query("query { streams(first: $PAGE) { edges { node { $STREAM_FIELDS } } } }")
+                .path("streams", "edges").array().mapNotNull { stream(it.path("node")) }
+        }
+        direct.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+        // Twitch sometimes answers the overall list with nothing; the biggest categories always
+        // have streams, and together they are the popular streams too
+        val fromCategories = coroutineScope {
+            topCategories().take(FALLBACK_CATEGORIES)
+                .map { async { runCatching { categoryStreams(it.name) }.getOrDefault(emptyList()) } }
+                .awaitAll().flatten()
+        }.distinctBy { it.login }.sortedByDescending { it.viewers }.take(PAGE)
+        if (fromCategories.isEmpty()) direct.exceptionOrNull()?.let { throw it }
+        return fromCategories
     }
 
     suspend fun topCategories(): List<TwitchCategory> {
@@ -187,7 +204,8 @@ class TwitchApi(private val http: OkHttpClient) {
         val answer = post(body)
         val error = answer.path("errors").array().firstOrNull()?.string("message")
         val data = answer.path("data")
-        if (data is JsonNull || data !is JsonObject) {
+        // Partial answers carry data with every asked-for field null; that is a failure too
+        if (data !is JsonObject || (error != null && data.values.all { it is JsonNull })) {
             throw TwitchException("Twitch antwortet nicht wie erwartet${error?.let { " ($it)" }.orEmpty()}.")
         }
         return data
@@ -231,6 +249,7 @@ class TwitchApi(private val http: OkHttpClient) {
             viewers = node.int("viewersCount"),
             game = node.path("game").string("displayName").orEmpty(),
             previewUrl = node.string("previewImageURL"),
+            startedAt = node.string("createdAt"),
         )
     }
 
@@ -246,6 +265,7 @@ class TwitchApi(private val http: OkHttpClient) {
             viewers = live.int("viewersCount"),
             game = live.path("game").string("displayName").orEmpty(),
             previewUrl = live.string("previewImageURL"),
+            startedAt = live.string("createdAt"),
         )
     }
 
@@ -266,10 +286,11 @@ class TwitchApi(private val http: OkHttpClient) {
         private val LOGIN = Regex("[a-z0-9_]{2,25}")
         private val json = Json { ignoreUnknownKeys = true }
 
-        private const val STREAM_FIELDS = "title viewersCount previewImageURL(width: 640, height: 360) " +
+        private const val FALLBACK_CATEGORIES = 6
+        private const val STREAM_FIELDS = "title viewersCount createdAt previewImageURL(width: 640, height: 360) " +
             "game { displayName } broadcaster { login displayName profileImageURL(width: 150) }"
         private const val USER_FIELDS = "login displayName profileImageURL(width: 150) stream { title " +
-            "viewersCount previewImageURL(width: 640, height: 360) game { displayName } }"
+            "viewersCount createdAt previewImageURL(width: 640, height: 360) game { displayName } }"
     }
 }
 
