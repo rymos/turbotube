@@ -31,9 +31,14 @@ data class TwitchAccount(val token: String, val login: String, val userId: Strin
  * Twitch's Android app gets, without extra permissions.
  */
 class TwitchAuth(private val http: OkHttpClient) {
+    /** Twitch expects the same device id on every call of one sign-in, like its app sends. */
+    private val deviceId = List(32) { "0123456789abcdef".random() }.joinToString("")
+
     suspend fun start(): DeviceLogin {
-        val answer = post("https://id.twitch.tv/oauth2/device", "client_id" to CLIENT_ID, "scopes" to "")
-            ?: throw TwitchException("Twitch-Anmeldung gerade nicht möglich.")
+        val answer = when (val reply = post("https://id.twitch.tv/oauth2/device", "client_id" to CLIENT_ID, "scopes" to "")) {
+            is Reply.Ok -> reply.body
+            is Reply.Refused -> throw TwitchException("Twitch lehnt die Anmeldung gerade ab: ${reply.reason}")
+        }
         return DeviceLogin(
             userCode = answer.string("user_code") ?: throw TwitchException("Twitch hat keinen Code geschickt."),
             verificationUri = answer.string("verification_uri") ?: "https://www.twitch.tv/activate",
@@ -46,14 +51,26 @@ class TwitchAuth(private val http: OkHttpClient) {
     /** Waits until the code was entered; null when it expired first. */
     suspend fun await(login: DeviceLogin): TwitchAccount? {
         val deadline = System.currentTimeMillis() + login.expiresInSeconds * 1000L
+        var interval = login.intervalSeconds
         while (System.currentTimeMillis() < deadline) {
-            delay(login.intervalSeconds * 1000L)
-            val answer = post(
+            delay(interval * 1000L)
+            val reply = post(
                 "https://id.twitch.tv/oauth2/token",
                 "client_id" to CLIENT_ID,
                 "device_code" to login.deviceCode,
                 "grant_type" to "urn:ietf:params:oauth:grant-type:device_code",
-            ) ?: continue // not entered yet
+            )
+            val answer = when (reply) {
+                is Reply.Ok -> reply.body
+                is Reply.Refused -> when {
+                    "slow_down" in reply.reason -> {
+                        interval += 5
+                        continue
+                    }
+                    "expired" in reply.reason || "invalid device code" in reply.reason -> return null
+                    else -> continue // usually "authorization_pending": not entered yet
+                }
+            }
             val token = answer.string("access_token") ?: continue
             return validate(token) ?: throw TwitchException("Twitch hat die Anmeldung nicht bestätigt.")
         }
@@ -78,19 +95,46 @@ class TwitchAuth(private val http: OkHttpClient) {
         }
     }
 
-    /** Null for 4xx answers, which during sign-in mean "not yet". */
-    private suspend fun post(url: String, vararg fields: Pair<String, String>): JsonObject? = withContext(Dispatchers.IO) {
+    private sealed interface Reply {
+        data class Ok(val body: JsonObject) : Reply
+
+        /** A 4xx answer; [reason] is Twitch's own message and the status, e.g. "authorization_pending (400)". */
+        data class Refused(val reason: String) : Reply
+    }
+
+    private suspend fun post(url: String, vararg fields: Pair<String, String>): Reply = withContext(Dispatchers.IO) {
         val form = FormBody.Builder().apply { fields.forEach { (k, v) -> add(k, v) } }.build()
+        // The headers Twitch's own app sends; without them the sign-in can be refused
         val request = Request.Builder()
             .url(url)
+            .header("Accept", "application/json")
+            .header("Accept-Language", "de-DE")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
             .header("Client-Id", CLIENT_ID)
+            .header("Origin", "https://www.twitch.tv")
+            .header("Referer", "https://www.twitch.tv/")
             .header("User-Agent", USER_AGENT)
+            .header("X-Device-Id", deviceId)
             .post(form)
             .build()
-        http.newCall(request).execute().use { response ->
-            if (response.code in 400..499) return@withContext null
-            if (!response.isSuccessful) throw IOException("Twitch-Anmeldung: Fehler ${response.code}")
-            json.parseToJsonElement(response.body.string()) as? JsonObject
+        try {
+            http.newCall(request).execute().use { response ->
+                val text = response.body.string()
+                val body = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+                when {
+                    response.isSuccessful && body != null -> Reply.Ok(body)
+                    response.code in 400..499 -> {
+                        val message = body?.string("message") ?: body?.string("error") ?: text.take(120).ifBlank { "ohne Begründung" }
+                        Reply.Refused("$message (${response.code})")
+                    }
+                    else -> throw TwitchException("Twitch ist gerade nicht erreichbar (Fehler ${response.code}).")
+                }
+            }
+        } catch (e: TwitchException) {
+            throw e
+        } catch (e: IOException) {
+            throw TwitchException("Keine Verbindung zu Twitch: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 

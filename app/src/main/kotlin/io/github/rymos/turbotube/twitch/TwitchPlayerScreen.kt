@@ -59,7 +59,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import io.github.rymos.turbotube.core.twitch.ChatMessage
 import io.github.rymos.turbotube.core.twitch.TwitchChannel
@@ -222,10 +221,7 @@ private fun InfoBar(
                     // Followed with the Twitch account: that list is changed on Twitch itself
                     onClick = { if (!onTwitch) controller.favorites.toggle(channel.login) },
                     modifier = Modifier.focusProperties { canFocus = active }.focusRequester(firstButton),
-                    colors = ButtonDefaults.colors(
-                        containerColor = if (following) TwitchColors.SurfaceHigh else TwitchColors.Purple,
-                        contentColor = Color.White,
-                    ),
+                    colors = twitchButtonColors(primary = !following),
                 ) {
                     Text(
                         when {
@@ -238,17 +234,17 @@ private fun InfoBar(
                 Button(
                     onClick = { controller.toggleChat() },
                     modifier = Modifier.focusProperties { canFocus = active },
-                    colors = ButtonDefaults.colors(containerColor = TwitchColors.SurfaceHigh, contentColor = Color.White),
+                    colors = twitchButtonColors(),
                 ) { Text(if (controller.chatVisible) "Chat ausblenden" else "Chat einblenden") }
                 Button(
                     onClick = { controller.nextQuality() },
                     modifier = Modifier.focusProperties { canFocus = active },
-                    colors = ButtonDefaults.colors(containerColor = TwitchColors.SurfaceHigh, contentColor = Color.White),
+                    colors = twitchButtonColors(),
                 ) { Text("Qualität: " + (controller.maxHeight?.let { "${it}p" } ?: "Auto")) }
                 Button(
                     onClick = { controller.nextPictureFit() },
                     modifier = Modifier.focusProperties { canFocus = active },
-                    colors = ButtonDefaults.colors(containerColor = TwitchColors.SurfaceHigh, contentColor = Color.White),
+                    colors = twitchButtonColors(),
                 ) { Text("Bild: " + controller.pictureFit.label) }
             }
             Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream.", color = TwitchColors.TextMuted, fontSize = 12.sp)
