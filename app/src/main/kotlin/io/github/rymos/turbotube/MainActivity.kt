@@ -28,6 +28,7 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import io.github.rymos.turbotube.ui.TurbotubeMenu
 import io.github.rymos.turbotube.update.UpdateState
+import io.github.rymos.turbotube.web.PlaybackLimits
 import io.github.rymos.turbotube.web.TizenTubeScript
 import io.github.rymos.turbotube.web.TrackerBlocker
 import kotlinx.coroutines.launch
@@ -74,9 +75,8 @@ class MainActivity : ComponentActivity() {
                     "Der Werbeblocker konnte nicht geladen werden, Werbung wird diesmal nicht entfernt.",
                     Toast.LENGTH_LONG,
                 ).show()
-            } else {
-                inject(script)
             }
+            inject(script)
             if (savedInstanceState == null) {
                 webView.loadUrl(startUrl(intent))
             } else {
@@ -158,13 +158,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun inject(script: String) {
+    private fun inject(script: String?) {
         // Guarded, so a page that gets the script twice doesn't patch itself twice
-        // The bridge has to be in place before YouTube's own scripts run. The ad blocker itself
-        // must wait until YouTube's app object (_yttv) exists: it hooks the JSON parsers kept in
-        // there, and finds none when it runs too early, which let every ad through.
-        val guarded = "if(!window.__turbotube){window.__turbotube=true;\n$JSON_BRIDGE\n" +
-            "window.__ttRun=function(){\n$script\n};\n$WAIT_AND_RUN\n}"
+        // The bridge and the playback limits have to be in place before YouTube's own scripts
+        // run. The ad blocker itself must wait until YouTube's app object (_yttv) exists: it
+        // hooks the JSON parsers kept in there, and finds none when it runs too early, which let
+        // every ad through.
+        val adBlock = script?.let { "$JSON_BRIDGE\nwindow.__ttRun=function(){\n$it\n};\n$WAIT_AND_RUN" }.orEmpty()
+        val guarded = "if(!window.__turbotube){window.__turbotube=true;\n" +
+            "${PlaybackLimits.script(this)}\n$adBlock\n}"
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(webView, guarded, setOf("https://www.youtube.com"))
         } else {
