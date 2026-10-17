@@ -27,12 +27,14 @@ import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.update.Updater
 import kotlinx.coroutines.launch
 
-/** Turbotube's own menu over YouTube: updates, reload, exit. Opened by holding Back. */
+/** Turbotube's own menu: updates, reload, YouTube or Twitch, exit. Opened by holding Back. */
 @Composable
 fun TurbotubeMenu(
     updater: Updater,
+    twitchMode: Boolean,
     adBlockLoaded: Boolean,
     onReload: () -> Unit,
+    onSwitch: () -> Unit,
     onExit: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -52,7 +54,7 @@ fun TurbotubeMenu(
         ) {
             Column(
                 Modifier
-                    .widthIn(max = 640.dp)
+                    .widthIn(max = 760.dp)
                     .background(Color(0xFF1F1F1F), RoundedCornerShape(16.dp))
                     .padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -63,10 +65,16 @@ fun TurbotubeMenu(
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFFDDDDDD),
                 )
+                // The Twitch filter is part of the app itself, so it is always there
+                val filterOk = twitchMode || adBlockLoaded
                 Text(
-                    if (adBlockLoaded) "Werbeblocker: aktiv" else "Werbeblocker: nicht geladen, bitte Turbotube neu starten",
+                    when {
+                        twitchMode -> "Twitch-Werbefilter: aktiv"
+                        adBlockLoaded -> "Werbeblocker: aktiv"
+                        else -> "Werbeblocker: nicht geladen, bitte Turbotube neu starten"
+                    },
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (adBlockLoaded) Color(0xFF8BD18B) else Color(0xFFFFB4A9),
+                    color = if (filterOk) Color(0xFF8BD18B) else Color(0xFFFFB4A9),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     // One button that changes its label, so the focus stays on it when the
@@ -81,15 +89,20 @@ fun TurbotubeMenu(
                         },
                         modifier = Modifier.focusRequester(firstButton),
                     ) { Text(if (pending != null) "Update installieren" else "Nach Updates suchen") }
-                    Button(onClick = onReload) { Text("YouTube neu laden") }
+                    Button(onClick = onReload) { Text(if (twitchMode) "Twitch neu laden" else "YouTube neu laden") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onClose) { Text("Zurück zu YouTube") }
+                    Button(onClick = onSwitch) { Text(if (twitchMode) "Zu YouTube wechseln" else "Zu Twitch wechseln") }
+                    Button(onClick = onClose) { Text(if (twitchMode) "Zurück zu Twitch" else "Zurück zu YouTube") }
                     Button(onClick = onExit) { Text("Beenden") }
                 }
                 Text(
                     "Dieses Menü öffnest du jederzeit, indem du die Zurück-Taste gedrückt hältst. " +
-                        "Werbeblocker und SponsorBlock stellst du in YouTube unter Einstellungen ein.",
+                        if (twitchMode) {
+                            "Favoriten speicherst du im Stream mit OK."
+                        } else {
+                            "Werbeblocker und SponsorBlock stellst du in YouTube unter Einstellungen ein."
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFAAAAAA),
                 )
