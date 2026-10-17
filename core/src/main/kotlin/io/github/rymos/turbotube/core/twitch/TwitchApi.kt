@@ -1,0 +1,286 @@
+package io.github.rymos.turbotube.core.twitch
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
+import kotlin.random.Random
+
+/** A channel, live or not. The stream fields are only set while it is live. */
+data class TwitchChannel(
+    val login: String,
+    val displayName: String,
+    val avatarUrl: String? = null,
+    val live: Boolean = false,
+    val title: String = "",
+    val viewers: Int = 0,
+    val game: String = "",
+    val previewUrl: String? = null,
+)
+
+data class TwitchCategory(
+    val name: String,
+    val displayName: String,
+    val viewers: Int,
+    val boxArtUrl: String?,
+)
+
+/** The playlist URL of a live stream and which kind of player Twitch thinks is asking. */
+data class TwitchStream(val url: String, val playerType: String)
+
+class TwitchException(message: String) : IOException(message)
+
+/**
+ * Twitch's own web API (gql.twitch.tv), anonymous: no account, no login. It answers with the
+ * public client id of Twitch's website, like every other independent Twitch player does.
+ */
+class TwitchApi(private val http: OkHttpClient) {
+    // A fresh one per app start; Twitch only needs it to tell sessions apart
+    private val deviceId = (1..32).map { DEVICE_ID_CHARS[Random.nextInt(DEVICE_ID_CHARS.length)] }.joinToString("")
+
+    suspend fun topStreams(): List<TwitchChannel> {
+        val data = query("query { streams(first: $PAGE) { edges { node { $STREAM_FIELDS } } } }")
+        return data.path("streams", "edges").array().mapNotNull { stream(it.path("node")) }
+    }
+
+    suspend fun topCategories(): List<TwitchCategory> {
+        val data = query(
+            "query { games(first: $PAGE) { edges { node { name displayName viewersCount " +
+                "boxArtURL(width: 285, height: 380) } } } }",
+        )
+        return data.path("games", "edges").array().mapNotNull {
+            val node = it.path("node")
+            val name = node.string("name") ?: return@mapNotNull null
+            TwitchCategory(
+                name = name,
+                displayName = node.string("displayName") ?: name,
+                viewers = node.int("viewersCount"),
+                boxArtUrl = node.string("boxArtURL"),
+            )
+        }
+    }
+
+    suspend fun categoryStreams(name: String): List<TwitchChannel> {
+        val data = query(
+            "query(\$name: String!) { game(name: \$name) { streams(first: $PAGE) { edges { node { " +
+                "$STREAM_FIELDS } } } } }",
+            "name" to name,
+        )
+        return data.path("game", "streams", "edges").array().mapNotNull { stream(it.path("node")) }
+    }
+
+    /** The given channels in the given order, live ones with their stream. */
+    suspend fun channels(logins: List<String>): List<TwitchChannel> {
+        if (logins.isEmpty()) return emptyList()
+        val data = query(
+            "query(\$logins: [String!]) { users(logins: \$logins) { $USER_FIELDS } }",
+            "logins" to logins,
+        )
+        return data.path("users").array().mapNotNull(::user)
+    }
+
+    /** Channels whose name matches; an exact channel name always comes first. */
+    suspend fun search(text: String): List<TwitchChannel> {
+        val login = text.trim().lowercase().replace(" ", "")
+        val exact = if (LOGIN.matches(login)) channels(listOf(login)) else emptyList()
+        // Twitch's search query is not documented and changes now and then; the exact match
+        // keeps working without it
+        val found = runCatching {
+            query(
+                "query(\$q: String!) { searchFor(userQuery: \$q, platform: \"web\") { channels { " +
+                    "edges { item { ... on User { $USER_FIELDS } } } } } }",
+                "q" to text.trim(),
+            ).path("searchFor", "channels", "edges").array().mapNotNull { user(it.path("item")) }
+        }.getOrDefault(emptyList())
+        return (exact + found).distinctBy { it.login }
+    }
+
+    /**
+     * Finds a way into the stream that carries no ads right now. Twitch hands out ads by the kind
+     * of player that asks; the ones tried here get none or few. If every one carries ads, the
+     * first is used and the [PlaylistCleaner] cuts them out.
+     */
+    suspend fun stream(login: String, skip: String? = null): TwitchStream {
+        var first: TwitchStream? = null
+        for (type in PLAYER_TYPES) {
+            if (type == skip) continue
+            val url = runCatching { playlistUrl(login, type) }.getOrNull() ?: continue
+            val stream = TwitchStream(url, type)
+            if (first == null) first = stream
+            if (runCatching { !hasAds(url) }.getOrDefault(false)) return stream
+        }
+        return first ?: throw TwitchException("$login ist gerade nicht live.")
+    }
+
+    /** Whether the stream behind this master playlist is showing ads at the moment. */
+    suspend fun hasAds(masterUrl: String): Boolean {
+        val master = get(masterUrl)
+        val variant = master.lines().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+            ?: return false
+        val playlist = masterUrl.toHttpUrl().resolve(variant) ?: return false
+        return get(playlist.toString()).contains("stitched")
+    }
+
+    private suspend fun playlistUrl(login: String, playerType: String): String? {
+        val body = buildJsonObject {
+            put("operationName", "PlaybackAccessToken")
+            putJsonObject("variables") {
+                put("isLive", true)
+                put("login", login)
+                put("isVod", false)
+                put("vodID", "")
+                put("playerType", playerType)
+                put("platform", if (playerType == "autoplay") "android" else "web")
+            }
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", PLAYBACK_TOKEN_HASH)
+                }
+            }
+        }
+        val token = post(body).path("data", "streamPlaybackAccessToken")
+        val value = token.string("value") ?: return null
+        val signature = token.string("signature") ?: return null
+        return "https://usher.ttvnw.net/api/v2/channel/hls/${login.lowercase()}.m3u8".toHttpUrl().newBuilder()
+            .addQueryParameter("platform", "web")
+            .addQueryParameter("p", Random.nextInt(999_999).toString())
+            .addQueryParameter("allow_source", "true")
+            .addQueryParameter("allow_audio_only", "true")
+            .addQueryParameter("playlist_include_framerate", "true")
+            .addQueryParameter("supported_codecs", "h264")
+            .addQueryParameter("fast_bread", "true")
+            .addQueryParameter("sig", signature)
+            .addQueryParameter("token", value)
+            .build().toString()
+    }
+
+    private suspend fun query(text: String, vararg variables: Pair<String, Any>): JsonElement {
+        val body = buildJsonObject {
+            put("query", text)
+            putJsonObject("variables") {
+                for ((key, value) in variables) {
+                    when (value) {
+                        is String -> put(key, value)
+                        is List<*> -> putJsonArray(key) { value.forEach { add(JsonPrimitive(it.toString())) } }
+                        else -> put(key, value.toString())
+                    }
+                }
+            }
+        }
+        val answer = post(body)
+        val error = answer.path("errors").array().firstOrNull()?.string("message")
+        val data = answer.path("data")
+        if (data is JsonNull || data !is JsonObject) {
+            throw TwitchException("Twitch antwortet nicht wie erwartet${error?.let { " ($it)" }.orEmpty()}.")
+        }
+        return data
+    }
+
+    private suspend fun post(body: JsonObject): JsonElement = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("https://gql.twitch.tv/gql")
+            .header("Client-ID", CLIENT_ID)
+            .header("X-Device-Id", deviceId)
+            .header("User-Agent", USER_AGENT)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            if (!response.isSuccessful && text.isBlank()) {
+                throw TwitchException("Twitch ist gerade nicht erreichbar (Fehler ${response.code}).")
+            }
+            runCatching { json.parseToJsonElement(text) }
+                .getOrElse { throw TwitchException("Twitch antwortet nicht wie erwartet.") }
+        }
+    }
+
+    private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw TwitchException("Stream nicht verfügbar (Fehler ${response.code}).")
+            response.body.string()
+        }
+    }
+
+    private fun stream(node: JsonElement): TwitchChannel? {
+        val broadcaster = node.path("broadcaster")
+        val login = broadcaster.string("login") ?: return null
+        return TwitchChannel(
+            login = login,
+            displayName = broadcaster.string("displayName") ?: login,
+            avatarUrl = broadcaster.string("profileImageURL"),
+            live = true,
+            title = node.string("title").orEmpty(),
+            viewers = node.int("viewersCount"),
+            game = node.path("game").string("displayName").orEmpty(),
+            previewUrl = node.string("previewImageURL"),
+        )
+    }
+
+    private fun user(node: JsonElement): TwitchChannel? {
+        val login = node.string("login") ?: return null
+        val live = node.path("stream")
+        return TwitchChannel(
+            login = login,
+            displayName = node.string("displayName") ?: login,
+            avatarUrl = node.string("profileImageURL"),
+            live = live is JsonObject,
+            title = live.string("title").orEmpty(),
+            viewers = live.int("viewersCount"),
+            game = live.path("game").string("displayName").orEmpty(),
+            previewUrl = live.string("previewImageURL"),
+        )
+    }
+
+    companion object {
+        private const val CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
+        private const val PLAYBACK_TOKEN_HASH = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
+
+        /** Twitch refuses the stream token to requests that don't look like a browser. */
+        const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/131.0.0.0 Safari/537.36"
+
+        /** In this order; "autoplay" mostly comes without ads, but only in low quality. */
+        val PLAYER_TYPES = listOf("embed", "popout", "autoplay")
+
+        private const val PAGE = 40
+        private const val DEVICE_ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private val LOGIN = Regex("[a-z0-9_]{2,25}")
+        private val json = Json { ignoreUnknownKeys = true }
+
+        private const val STREAM_FIELDS = "title viewersCount previewImageURL(width: 640, height: 360) " +
+            "game { displayName } broadcaster { login displayName profileImageURL(width: 150) }"
+        private const val USER_FIELDS = "login displayName profileImageURL(width: 150) stream { title " +
+            "viewersCount previewImageURL(width: 640, height: 360) game { displayName } }"
+    }
+}
+
+private fun JsonElement?.path(vararg keys: String): JsonElement {
+    var current: JsonElement = this ?: JsonNull
+    for (key in keys) current = (current as? JsonObject)?.get(key) ?: JsonNull
+    return current
+}
+
+private fun JsonElement.array(): List<JsonElement> = (this as? JsonArray).orEmpty()
+
+private fun JsonElement.string(key: String): String? = (path(key) as? JsonPrimitive)?.contentOrNull
+
+private fun JsonElement.int(key: String): Int = (path(key) as? JsonPrimitive)?.intOrNull ?: 0

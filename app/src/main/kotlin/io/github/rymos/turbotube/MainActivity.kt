@@ -26,6 +26,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import io.github.rymos.turbotube.twitch.TwitchController
+import io.github.rymos.turbotube.twitch.TwitchScreen
 import io.github.rymos.turbotube.ui.TurbotubeMenu
 import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.web.PlaybackLimits
@@ -34,8 +36,9 @@ import io.github.rymos.turbotube.web.TrackerBlocker
 import kotlinx.coroutines.launch
 
 /**
- * YouTube's own TV interface (youtube.com/tv) with an ad-removing user script on top. Holding Back
- * opens Turbotube's own menu (updates, reload).
+ * YouTube's own TV interface (youtube.com/tv) with an ad-removing user script on top, and a Twitch
+ * side with its own interface and player. Holding Back opens Turbotube's own menu (updates,
+ * reload, switching between YouTube and Twitch).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -43,23 +46,37 @@ class MainActivity : ComponentActivity() {
     private var backLongPressed = false
     private var scriptForFallback: String? = null
     private var adBlockLoaded by mutableStateOf(false)
+    private var twitchMode by mutableStateOf(false)
+    private lateinit var twitch: TwitchController
+    private var scriptReady = false
+    private var youTubeStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as TurbotubeApp).container
         webView = createWebView()
+        twitch = TwitchController(container.twitchApi, container.favorites, lifecycleScope)
+        // Opens where it was left, except for a YouTube link sent to the TV
+        twitchMode = intent?.data == null && prefs().getBoolean(KEY_TWITCH, false)
+        if (twitchMode) {
+            webView.isFocusable = false
+            webView.onPause()
+        }
 
         setContent {
             Box(Modifier.fillMaxSize()) {
                 AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                if (twitchMode) TwitchScreen(twitch)
                 if (menuOpen) {
                     TurbotubeMenu(
                         updater = container.updater,
+                        twitchMode = twitchMode,
                         adBlockLoaded = adBlockLoaded,
                         onReload = {
                             closeMenu()
-                            webView.reload()
+                            if (twitchMode) twitch.refresh() else webView.reload()
                         },
+                        onSwitch = { switchMode(!twitchMode) },
                         onExit = { finish() },
                         onClose = { closeMenu() },
                     )
@@ -77,12 +94,11 @@ class MainActivity : ComponentActivity() {
                 ).show()
             }
             inject(script)
-            if (savedInstanceState == null) {
-                webView.loadUrl(startUrl(intent))
-            } else {
-                webView.restoreState(savedInstanceState)
+            scriptReady = true
+            if (!twitchMode) {
+                startYouTube(savedInstanceState)
+                webView.requestFocus()
             }
-            webView.requestFocus()
 
             // Look for a new Turbotube version once per start and offer it right away
             container.updater.check(quiet = true)
@@ -174,9 +190,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** YouTube only loads once it is shown, so a start on the Twitch side doesn't load it. */
+    private fun startYouTube(savedInstanceState: Bundle?) {
+        if (youTubeStarted) return
+        youTubeStarted = true
+        if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
+            webView.loadUrl(startUrl(intent))
+        }
+    }
+
+    private fun switchMode(toTwitch: Boolean) {
+        menuOpen = false
+        twitchMode = toTwitch
+        prefs().edit().putBoolean(KEY_TWITCH, toTwitch).apply()
+        if (toTwitch) {
+            // YouTube keeps playing in the background otherwise
+            webView.evaluateJavascript(PAUSE_VIDEOS, null)
+            webView.onPause()
+            webView.isFocusable = false
+            twitch.interactive = true
+        } else {
+            webView.onResume()
+            webView.isFocusable = true
+            if (scriptReady) startYouTube(null)
+            webView.requestFocus()
+        }
+    }
+
+    private fun prefs() = getSharedPreferences("turbotube", MODE_PRIVATE)
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.data != null) webView.loadUrl(startUrl(intent))
+        if (intent.data == null) return
+        setIntent(intent)
+        if (twitchMode) switchMode(false)
+        // Not started yet: the start picks the link up from the intent
+        if (youTubeStarted) webView.loadUrl(startUrl(intent))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -217,7 +266,13 @@ class MainActivity : ComponentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (!backLongPressed && !event.isCanceled) {
-                if (menuOpen) closeMenu() else sendEscape()
+                when {
+                    menuOpen -> closeMenu()
+                    twitchMode -> if (!twitch.back()) {
+                        Toast.makeText(this, "Zurück gedrückt halten öffnet das Turbotube-Menü.", Toast.LENGTH_SHORT).show()
+                    }
+                    else -> sendEscape()
+                }
             }
             return true
         }
@@ -231,16 +286,23 @@ class MainActivity : ComponentActivity() {
 
     // While the menu is open the WebView must not take focus, or the remote steers YouTube
     // behind the menu as soon as the focused menu button changes.
+    // On the Twitch side its lists are taken out of the focus order the same way.
     private fun openMenu() {
         webView.isFocusable = false
+        twitch.interactive = false
         menuOpen = true
         checkAdBlock()
     }
 
     private fun closeMenu() {
         menuOpen = false
-        webView.isFocusable = true
-        webView.requestFocus()
+        twitch.interactive = true
+        if (twitchMode) {
+            twitch.restoreFocus()
+        } else {
+            webView.isFocusable = true
+            webView.requestFocus()
+        }
     }
 
     private fun sendEscape() {
@@ -258,6 +320,10 @@ class MainActivity : ComponentActivity() {
                 "85.0.4183.93/6.5 TV Safari/537.36"
 
         private const val HOME = "https://www.youtube.com/tv"
+
+        private const val KEY_TWITCH = "twitch"
+
+        private const val PAUSE_VIDEOS = "document.querySelectorAll('video').forEach(function (v) { v.pause(); });"
 
         /** Everything else is handed to the system browser. */
         private val ALLOWED_HOSTS = listOf(

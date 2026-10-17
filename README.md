@@ -1,6 +1,6 @@
 # Turbotube
 
-YouTube für den Fernseher, ohne Werbung, mit SponsorBlock. Gebaut für den **Google TV Streamer 4K**,
+YouTube und Twitch für den Fernseher, ohne Werbung, mit SponsorBlock. Gebaut für den **Google TV Streamer 4K**,
 läuft aber auf jedem Android-TV- oder Google-TV-Gerät ab Android 8.
 
 Die App zeigt YouTubes eigene TV-Oberfläche (youtube.com/tv) und lädt darüber ein Skript, das die
@@ -11,6 +11,9 @@ allen Einstellungen.
   Einstellungen)
 - Werbe- und Statistik-Adressen werden in der App gesperrt (siehe `TrackerBlocker`). Wiedergabezeit
   und Verlauf gehen weiter an YouTube, sonst gäbe es keinen Verlauf und kein „Weiterschauen“.
+- **Twitch** mit eigener TV-Oberfläche (Favoriten, Beliebt, Kategorien, Suche) und Werbefilter, ohne
+  Twitch-Konto. Umschalten über das Turbotube-Menü: Zurück-Taste gedrückt halten →
+  „Zu Twitch wechseln“. Die App startet dort, wo du zuletzt warst.
 - Eingebaute Updates: **Zurück-Taste gedrückt halten** öffnet das Turbotube-Menü mit
   „Nach Updates suchen“. Gibt es eine neue Version, erscheint das Menü beim Start von selbst.
 
@@ -24,6 +27,10 @@ allen Einstellungen.
   Release, erst danach von npm. Es läuft, bevor YouTubes eigene Skripte starten.
 - `core/` enthält die Update-Prüfung gegen die GitHub-Releases, mit Tests. Sie liest die letzten
   Releases und nimmt den höchsten Build — „das neueste Release“ wäre nicht dasselbe.
+- `twitch/` ist die Twitch-Seite: eine eigene Oberfläche in Compose und ein Media3-Player.
+  `core/twitch/TwitchApi` fragt Twitchs Web-Schnittstelle anonym ab und sucht für jeden Stream einen
+  Zugang, der gerade keine Werbung trägt. Was trotzdem an Werbung im Stream steckt, schneidet
+  `PlaylistCleaner` aus der Wiedergabeliste, bevor der Player sie sieht (mit Tests).
 - Links, die nicht zu YouTube gehören, öffnet die App im System-Browser statt im WebView.
 
 ## Auf den Google TV Streamer bringen
@@ -90,12 +97,21 @@ Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
 ## Bedienung
 
 - Alles wie in der YouTube-App. Anmelden in YouTube unter „Anmelden“, dann den angezeigten Code auf dem Handy eingeben.
-- **Zurück gedrückt halten:** Turbotube-Menü (Updates, YouTube neu laden, Beenden)
+- **Zurück gedrückt halten:** Turbotube-Menü (Updates, neu laden, YouTube/Twitch wechseln, Beenden)
+- **Twitch:** Mit den Pfeiltasten durch die Streams, OK startet einen Stream. Im Stream öffnet OK die
+  Leiste mit „Als Favorit speichern“, Zurück beendet den Stream. Favoriten liegen nur auf dem Gerät.
 
 ## Grenzen
 
 - Ob YouTube im WebView 4K anbietet, hängt vom Gerät ab; im schlimmsten Fall ist bei 1080p Schluss.
 - Casting vom Handy auf den Fernseher geht nicht.
+- Twitch fügt Werbung direkt in den Videostrom ein. Turbotube nimmt einen Zugang ohne Werbung, wenn es
+  einen gibt, und schneidet sonst die Werbeschnipsel heraus; dann steht das Bild kurz mit dem Hinweis
+  „Werbepause“, bis der Stream weitergeht. Weil Twitch das immer wieder ändert, kann der Filter
+  zeitweise schlechter greifen, bis er angepasst ist. Ist ein werbefreier Zugang nur in niedriger
+  Qualität verfügbar, wechselt der Player später von selbst zurück auf volle Qualität.
+- Twitch ohne Anmeldung: kein Chat, keine gefolgten Kanäle aus dem Twitch-Konto (dafür Favoriten in
+  der App), keine Videos auf Abruf.
 - Googles eigene Oberfläche lädt weiterhin Googles Skripte; gesperrt werden nur die bekannten
   Werbe- und Statistik-Adressen.
 
@@ -103,5 +119,5 @@ Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
 
 GPL-3.0-or-later. Das eingebundene Skript ist [TizenTube](https://github.com/reisxd/TizenTube)
 von Reis Can, lizenziert unter GPL-3.0; die App liefert es unverändert mit (Version und Prüfsumme
-stehen in `TizenTubeScript.kt`). Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google
-oder YouTube.
+stehen in `TizenTubeScript.kt`). Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google,
+YouTube oder Twitch.
