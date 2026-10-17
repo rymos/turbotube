@@ -8,3 +8,5 @@ local.properties
 *.iml
 .DS_Store
 captures/
+# Fetched by the workflow (see .github/workflows/build.yml); not part of the repository
+app/src/main/assets/tizentube-*.js
