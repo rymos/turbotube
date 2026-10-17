@@ -1,6 +1,7 @@
 package io.github.rymos.turbotube
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -120,6 +121,15 @@ class MainActivity : ComponentActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 if (TrackerBlocker.isBlocked(request.url)) TrackerBlocker.emptyResponse() else null
 
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (!request.isForMainFrame) return false
+                // Links in descriptions and comments can lead anywhere. They must not turn a
+                // browser without an address bar into a page that looks like YouTube.
+                if (isYouTubePage(request.url)) return false
+                openOutside(request.url)
+                return true
+            }
+
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 // Older WebViews can't run scripts at document start; inject as early as possible
                 scriptForFallback?.let { view.evaluateJavascript(it, null) }
@@ -128,6 +138,23 @@ class MainActivity : ComponentActivity() {
         webChromeClient = object : WebChromeClient() {
             // "Exit YouTube?" in the TV interface closes the window
             override fun onCloseWindow(window: WebView) = finish()
+        }
+    }
+
+    /** Only YouTube itself stays in the WebView; login and video hosts included. */
+    private fun isYouTubePage(uri: Uri): Boolean {
+        if (uri.scheme != "https" && uri.scheme != "http") return false
+        val host = uri.host?.lowercase() ?: return false
+        // Google redirects the login to country domains (google.de and friends), so a fixed list
+        // of hosts is not enough — anything google.<tld> counts as ours.
+        return ALLOWED_HOSTS.any { host == it || host.endsWith(".$it") } || GOOGLE_DOMAINS.matches(host)
+    }
+
+    private fun openOutside(uri: Uri) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "Diesen Link kann Turbotube nicht öffnen.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -229,6 +256,22 @@ class MainActivity : ComponentActivity() {
                 "85.0.4183.93/6.5 TV Safari/537.36"
 
         private const val HOME = "https://www.youtube.com/tv"
+
+        /** Everything else is handed to the system browser. */
+        private val ALLOWED_HOSTS = listOf(
+            "youtube.com",
+            "youtu.be",
+            "youtube-nocookie.com",
+            "googlevideo.com",
+            "googleapis.com",
+            "googleusercontent.com",
+            "gstatic.com",
+            "ytimg.com",
+            "ggpht.com",
+        )
+
+        /** google.com and its country domains (google.de, google.co.uk) for the login. */
+        private val GOOGLE_DOMAINS = Regex("""(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$""")
 
         private const val PAGE_WIDTH = 1920
 
