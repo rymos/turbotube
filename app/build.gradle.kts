@@ -96,6 +96,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.tvprovider)
 
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
