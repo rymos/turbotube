@@ -18,6 +18,8 @@ data class AppUpdate(
     val name: String,
     val apkUrl: String,
     val sizeBytes: Long,
+    /** Release text (the commit list); empty for older releases that were published without one. */
+    val notes: String? = null,
 )
 
 /**
@@ -76,6 +78,7 @@ object UpdateChecker {
             name = release.text("name") ?: tag,
             apkUrl = apk.text("browser_download_url") ?: return null,
             sizeBytes = (apk["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: -1,
+            notes = release.text("body")?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 

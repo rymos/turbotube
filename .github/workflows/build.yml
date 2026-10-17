@@ -83,13 +83,32 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The commit history is needed only for the release text; no secrets are accessible here
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: turbotube-apk
 
+      # The app shows these lines as "Neu:" in its update strip
+      - name: Notizen aus den Commits seit dem letzten Build
+        id: notes
+        run: |
+          previous=$(git describe --tags --abbrev=0 --match 'build-*' HEAD^ 2>/dev/null || true)
+          if [ -z "$previous" ]; then previous=$(git rev-list --max-parents=0 HEAD); fi
+          {
+            echo "text<<TURBOTUBE_NOTES"
+            git log --no-merges --pretty=format:'- %s' "$previous..HEAD" | head -50
+            echo
+            echo "TURBOTUBE_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: build-${{ github.run_number }}
+          body: ${{ steps.notes.outputs.text }}
           name: Turbotube Build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           files: |
