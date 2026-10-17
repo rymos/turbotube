@@ -12,7 +12,8 @@ allen Einstellungen.
 - Werbe- und Statistik-Adressen werden in der App gesperrt (siehe `TrackerBlocker`). Wiedergabezeit
   und Verlauf gehen weiter an YouTube, sonst gäbe es keinen Verlauf und kein „Weiterschauen“.
 - **Twitch** mit Twitch-typischer TV-Oberfläche (Startseite mit Reihen, Folge ich, Durchsuchen,
-  Suche), Chat neben dem Stream und Werbefilter, ohne Twitch-Konto. Umschalten über das Turbotube-Menü: Zurück-Taste gedrückt halten →
+  Suche), Chat neben dem Stream und Werbefilter. Ein Twitch-Konto ist nicht nötig; wer will, verbindet
+  es unter „Konto“ mit einem Code auf twitch.tv/activate und hat dann seine gefolgten Kanäle drin. Umschalten über das Turbotube-Menü: Zurück-Taste gedrückt halten →
   „Zu Twitch wechseln“. Die App startet dort, wo du zuletzt warst.
 - Eingebaute Updates: **Zurück-Taste gedrückt halten** öffnet das Turbotube-Menü mit
   „Nach Updates suchen“. Gibt es eine neue Version, erscheint das Menü beim Start von selbst.
@@ -100,7 +101,8 @@ Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
 - **Zurück gedrückt halten:** Turbotube-Menü (Updates, neu laden, YouTube/Twitch wechseln, Beenden)
 - **Twitch:** Links die Leiste mit Startseite, Folge ich, Durchsuchen und Suche; OK startet einen
   Stream. Im Stream öffnet OK die Leiste mit Folgen, Chat ein/aus und Qualität, Zurück beendet den
-  Stream. „Folgen“ speichert den Kanal nur auf dem Gerät, nicht im Twitch-Konto.
+  Stream. „Folgen“ speichert den Kanal nur auf dem Gerät, nicht im Twitch-Konto. „Bild“ wechselt
+  zwischen Einpassen, Verkleinert (falls der Fernseher die Ränder abschneidet), Gestreckt und Zoom.
 
 ## Grenzen
 
@@ -111,8 +113,9 @@ Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
   „Werbepause“, bis der Stream weitergeht. Weil Twitch das immer wieder ändert, kann der Filter
   zeitweise schlechter greifen, bis er angepasst ist. Ist ein werbefreier Zugang nur in niedriger
   Qualität verfügbar, wechselt der Player später von selbst zurück auf volle Qualität.
-- Twitch ohne Anmeldung: Chat nur lesen (Emotes erscheinen als Text), keine gefolgten Kanäle aus dem
-  Twitch-Konto (dafür „Folgen“ in der App), keine Videos auf Abruf.
+- Twitch: Chat nur lesen (Emotes erscheinen als Text), keine Videos auf Abruf. Mit verbundenem Konto
+  liest die App nur die Liste der gefolgten Kanäle; Streams laufen weiter ohne Anmeldung. Folgen und
+  Entfolgen im Twitch-Konto selbst geht nur bei Twitch.
 - Googles eigene Oberfläche lädt weiterhin Googles Skripte; gesperrt werden nur die bekannten
   Werbe- und Statistik-Adressen.
 

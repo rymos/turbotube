@@ -101,6 +101,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.tv.material)
     implementation(libs.compose.material.icons)
+    implementation(libs.zxing.core)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
