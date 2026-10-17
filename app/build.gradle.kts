@@ -53,6 +53,16 @@ android {
         }
     }
 
+    // A published build must never fall back to the debug key: that APK can never be updated and
+    // the debug key is public. The workflow sets this for builds that go out as a release.
+    if (secret("TURBOTUBE_REQUIRE_SIGNING") == "1" && signingConfigs.findByName("release") == null) {
+        throw GradleException(
+            "TURBOTUBE_REQUIRE_SIGNING=1, aber kein Signaturschlüssel gefunden " +
+                "(TURBOTUBE_KEYSTORE_BASE64/TURBOTUBE_KEYSTORE_FILE fehlt). Ohne eigenen " +
+                "Schlüssel lässt sich die APK später nicht mehr updaten.",
+        )
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
