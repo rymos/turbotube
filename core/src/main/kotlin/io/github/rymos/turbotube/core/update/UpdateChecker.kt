@@ -6,7 +6,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -20,18 +21,28 @@ data class AppUpdate(
 )
 
 /**
- * Looks at the latest GitHub release. Every build of main is released as `build-<n>`, where n is
+ * Looks at the recent GitHub releases. Every build of main is released as `build-<n>`, where n is
  * the same number the APK carries as its versionCode.
+ *
+ * "latest" on GitHub means newest by creation date, not highest build number: a re-run, an
+ * out-of-order publish or a hand-made `v1.0` release ends up in front of it, and then the app
+ * would silently see no update at all. So a page of releases is read and the highest build number
+ * wins; releases without a `build-<n>` tag are ignored.
  */
 object UpdateChecker {
     const val REPO = "rymos/turbotube"
     private const val APK_NAME = "turbotube.apk"
 
-    /** The latest release if it is newer than [currentBuild], otherwise null. */
+    /** Enough releases to cover the recent builds; older ones cannot be updates any more. */
+    private const val PAGE_SIZE = 20
+
+    private val BUILD_TAG = Regex("""^build-(\d+)$""")
+
+    /** The newest update if it is newer than [currentBuild], otherwise null. */
     suspend fun check(client: OkHttpClient, currentBuild: Int, repo: String = REPO): AppUpdate? {
         val text = withContext(Dispatchers.IO) {
             val request = Request.Builder()
-                .url("https://api.github.com/repos/$repo/releases/latest")
+                .url("https://api.github.com/repos/$repo/releases?per_page=$PAGE_SIZE")
                 .header("Accept", "application/vnd.github+json")
                 .build()
             client.newCall(request).execute().use { response ->
@@ -39,12 +50,24 @@ object UpdateChecker {
                 response.body.string()
             }
         }
-        return parse(Json.parseToJsonElement(text).jsonObject)?.takeIf { it.buildNumber > currentBuild }
+        return newest(Json.parseToJsonElement(text).jsonArray, newerThan = currentBuild)
     }
+
+    /** The highest build out of a release list that is newer than [newerThan]. */
+    internal fun newest(releases: JsonArray, newerThan: Int): AppUpdate? =
+        parseAll(releases)
+            .filter { it.buildNumber > newerThan }
+            .maxByOrNull { it.buildNumber }
+
+    /** Every usable update in a release list; drafts and releases without a build tag are dropped. */
+    internal fun parseAll(releases: JsonArray): List<AppUpdate> = releases
+        .mapNotNull { it as? JsonObject }
+        .filterNot { it.flag("draft") }
+        .mapNotNull(::parse)
 
     internal fun parse(release: JsonObject): AppUpdate? {
         val tag = release.text("tag_name") ?: return null
-        val build = Regex("""^build-(\d+)$""").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        val build = BUILD_TAG.find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: return null
         val apk = (release["assets"] as? JsonArray).orEmpty()
             .mapNotNull { it as? JsonObject }
             .firstOrNull { it.text("name") == APK_NAME } ?: return null
@@ -58,4 +81,7 @@ object UpdateChecker {
 
     private fun JsonObject.text(key: String) =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    /** GitHub sends `"draft": true` as a JSON boolean, not as a string. */
+    private fun JsonObject.flag(key: String) = (this[key] as? JsonPrimitive)?.booleanOrNull ?: false
 }
