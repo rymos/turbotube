@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -31,6 +32,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import io.github.rymos.turbotube.core.update.AppUpdate
+import io.github.rymos.turbotube.preview.PreviewExtract
+import io.github.rymos.turbotube.preview.PreviewShelf
 import io.github.rymos.turbotube.twitch.TwitchController
 import io.github.rymos.turbotube.twitch.TwitchScreen
 import io.github.rymos.turbotube.ui.TurbotubeMenu
@@ -39,6 +42,8 @@ import io.github.rymos.turbotube.update.UpdateState
 import io.github.rymos.turbotube.web.PlaybackLimits
 import io.github.rymos.turbotube.web.TizenTubeScript
 import io.github.rymos.turbotube.web.TrackerBlocker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -77,6 +82,9 @@ class MainActivity : ComponentActivity() {
 
     /** The resume that follows onCreate is the start itself, which already looked. */
     private var appAlreadyResumed = false
+
+    /** Looks at the start page a few times after it loaded; cancelled when the next page comes. */
+    private var previewLook: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -181,6 +189,8 @@ class MainActivity : ComponentActivity() {
             mediaPlaybackRequiresUserGesture = false
             userAgentString = TV_USER_AGENT
         }
+        // The start page hands its tiles over through this (see PreviewBridge)
+        addJavascriptInterface(PreviewBridge(), PreviewExtract.BRIDGE)
         val view = this
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -212,6 +222,10 @@ class MainActivity : ComponentActivity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 // Older WebViews can't run scripts at document start; inject as early as possible
                 scriptForFallback?.let { view.evaluateJavascript(it, null) }
+            }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                lookForPreviews(url)
             }
         }
         webChromeClient = object : WebChromeClient() {
@@ -394,6 +408,36 @@ class MainActivity : ComponentActivity() {
         webView.evaluateJavascript("!!window.__ttOk") { adBlockLoaded = it == "true" }
     }
 
+    /**
+     * Fills Turbotube's channel with what the start page shows, so the TV's home screen has tiles
+     * while Turbotube is highlighted in the app row. The tiles only exist once YouTube painted
+     * them, which is a moment after the page reports it is done — hence a few looks at different
+     * times. The app side keeps the work cheap: an unchanged set of tiles is not written again.
+     */
+    private fun lookForPreviews(url: String?) {
+        previewLook?.cancel()
+        val address = url ?: return
+        if (twitchMode || !isYouTubePage(Uri.parse(address))) return
+        previewLook = lifecycleScope.launch {
+            for (wait in PREVIEW_LOOKS) {
+                delay(wait)
+                webView.evaluateJavascript(PreviewExtract.SCRIPT, null)
+            }
+        }
+    }
+
+    /** The page's way in: the tiles it found, as JSON. */
+    private inner class PreviewBridge {
+        @JavascriptInterface
+        fun publish(json: String) {
+            val items = PreviewShelf.parse(json)
+            if (items.isEmpty()) return
+            lifecycleScope.launch(Dispatchers.IO) {
+                PreviewShelf.publish(applicationContext, items)
+            }
+        }
+    }
+
     // While the menu is open the WebView must not take focus, or the remote steers YouTube
     // behind the menu as soon as the focused menu button changes.
     // On the Twitch side its lists are taken out of the focus order the same way.
@@ -505,6 +549,12 @@ class MainActivity : ComponentActivity() {
 
         private const val PAGE_WIDTH = 1920
 
+        /** When to look at the start page for tiles; the first look usually is enough. */
+        private val PREVIEW_LOOKS = listOf(4000L, 12000L, 30000L)
+
+        /** The scheme a tile in the home screen's app row carries (see PreviewShelf). */
+        private const val WATCH_SCHEME = "turbotube"
+
         /** A switch asks GitHub at most this often; one look per start always happens. */
         private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
 
@@ -585,6 +635,8 @@ class MainActivity : ComponentActivity() {
         }
 
         private fun videoId(uri: Uri): String? = when {
+            // A tile of Turbotube's own home screen channel
+            uri.scheme == WATCH_SCHEME && uri.host == "watch" -> uri.lastPathSegment
             uri.host == "youtu.be" -> uri.lastPathSegment
             uri.path?.startsWith("/shorts/") == true || uri.path?.startsWith("/live/") == true ->
                 uri.lastPathSegment
