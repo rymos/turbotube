@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -20,6 +21,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -54,6 +56,15 @@ class MainActivity : ComponentActivity() {
     private var scriptReady = false
     private var youTubeStarted = false
 
+    /** Bumped whenever the WebView had to be rebuilt, so Compose puts the new one on screen. */
+    private var webViewGeneration by mutableStateOf(0)
+
+    /** The ad-blocking script, kept so a rebuilt WebView can be given it again. */
+    private var adScript: String? = null
+
+    /** Where the old WebView was, while the Twitch side is on screen during a rebuild. */
+    private var lostUrl: String? = null
+
     /** The update strip at the top; shown on start and on every switch while a build is waiting. */
     private var bannerVisible by mutableStateOf(false)
 
@@ -78,7 +89,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Box(Modifier.fillMaxSize()) {
-                AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                // A new key after a renderer crash makes Compose mount the freshly built WebView
+                key(webViewGeneration) {
+                    AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                }
                 if (twitchMode) TwitchScreen(twitch)
                 if (bannerVisible && !menuOpen) {
                     UpdateBanner(
@@ -120,6 +134,7 @@ class MainActivity : ComponentActivity() {
                     Toast.LENGTH_LONG,
                 ).show()
             }
+            adScript = script
             inject(script)
             scriptReady = true
             if (!twitchMode) {
@@ -160,6 +175,16 @@ class MainActivity : ComponentActivity() {
             setAcceptThirdPartyCookies(view, true)
         }
         webViewClient = object : WebViewClient() {
+            /**
+             * Android kills the WebView renderer when memory runs low or a page brings it down.
+             * Left alone that takes the whole app with it. Build a fresh WebView and put the
+             * same page back instead of showing a dead window.
+             */
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                recoverWebView(view)
+                return true
+            }
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 if (TrackerBlocker.isBlocked(request.url)) TrackerBlocker.emptyResponse() else null
 
@@ -242,6 +267,11 @@ class MainActivity : ComponentActivity() {
             webView.onResume()
             webView.isFocusable = true
             if (scriptReady) startYouTube(null)
+            // A renderer crash while Twitch was on screen left the page here unloaded
+            lostUrl?.let { url ->
+                lostUrl = null
+                webView.loadUrl(url)
+            }
             webView.requestFocus()
         }
         // A new build is offered again after every switch, even if it was waved off before
@@ -310,6 +340,30 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.onKeyUp(keyCode, event)
+    }
+
+    /**
+     * Replaces a WebView whose renderer died. The page it showed comes back; on the Twitch side
+     * the address is only remembered and loaded when YouTube is shown again.
+     */
+    private fun recoverWebView(dead: WebView) {
+        val url = dead.url ?: startUrl(intent)
+        runCatching { dead.destroy() }
+        webView = createWebView()
+        webViewGeneration++
+        inject(adScript)
+        if (twitchMode) {
+            lostUrl = url
+            webView.isFocusable = false
+            webView.visibility = View.INVISIBLE
+        } else {
+            webView.loadUrl(url)
+            if (!menuOpen && !bannerVisible) {
+                webView.isFocusable = true
+                webView.requestFocus()
+            }
+        }
+        Toast.makeText(this, "Der Browser-Teil ist abgestürzt – Turbotube lädt die Seite neu.", Toast.LENGTH_SHORT).show()
     }
 
     /** Asks the page whether the ad blocker really runs, for the status line in the menu. */

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -25,6 +26,17 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import io.github.rymos.turbotube.core.update.AppUpdate
 import io.github.rymos.turbotube.update.UpdateState
+
+/**
+ * The first lines of a release text as one readable sentence, without markdown bullets.
+ */
+private fun newInBuild(notes: String): String = notes.lineSequence()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("**Full Changelog") }
+    .map { it.removePrefix("- ").removePrefix("* ").trim() }
+    .filter { it.isNotEmpty() }
+    .take(3)
+    .joinToString(" · ")
 
 /**
  * A strip across the top of the screen that offers a new build right away — at every start and
@@ -94,6 +106,17 @@ fun UpdateBanner(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFFBBBBBB),
                     )
+                    // What the new build actually brings; older releases carry no notes
+                    val changes = update?.notes?.let(::newInBuild).orEmpty()
+                    if (changes.isNotEmpty()) {
+                        Text(
+                            "Neu: $changes",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF8BD18B),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 when {
                     update != null -> {

@@ -30,6 +30,18 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun readsReleaseNotes() {
+        val withNotes = """
+            {"tag_name":"build-40","body":"- Update-Streifen beim Start\n- Renderer-Crash abgefangen","assets":[
+              {"name":"turbotube.apk","browser_download_url":"https://example.com/40.apk","size":5}]}
+        """
+        assertEquals("- Update-Streifen beim Start\n- Renderer-Crash abgefangen", parse(withNotes)?.notes)
+        // Older releases were published without text; the strip then just shows the build number.
+        assertNull(parse(release)?.notes)
+        assertNull(parse("""{"tag_name":"build-41","body":"   \n","assets":[{"name":"turbotube.apk","browser_download_url":"https://example.com/41.apk"}]}""")?.notes)
+    }
+
+    @Test
     fun ignoresOtherTags() {
         assertNull(parse("""{"tag_name":"v1.0","assets":[]}"""))
         assertNull(parse("""{"tag_name":"build-x","assets":[]}"""))
