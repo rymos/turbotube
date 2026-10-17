@@ -17,7 +17,8 @@ allen Einstellungen.
   „Zu Twitch wechseln“. Die App startet dort, wo du zuletzt warst.
 - Eingebaute Updates: Ist eine neue Version da, liegt beim Start und nach jedem Wechsel zwischen
   YouTube und Twitch ein Streifen mit „Jetzt installieren“ oben im Bild — ein Druck auf OK genügt,
-  „Später“ oder Zurück lässt ihn liegen. Sonst gibt es im Turbotube-Menü (Zurück-Taste gedrückt
+  „Später“ oder Zurück lässt ihn liegen. Darunter steht, was der neue Build mitbringt; der
+  Workflow schreibt die Commit-Titel als Release-Text mit. Sonst gibt es im Turbotube-Menü (Zurück-Taste gedrückt
   halten) weiter „Nach Updates suchen“.
 
 ## So funktioniert es
@@ -35,6 +36,8 @@ allen Einstellungen.
   Zugang, der gerade keine Werbung trägt. Was trotzdem an Werbung im Stream steckt, schneidet
   `PlaylistCleaner` aus der Wiedergabeliste, bevor der Player sie sieht (mit Tests).
 - Links, die nicht zu YouTube gehören, öffnet die App im System-Browser statt im WebView.
+- Stirbt Androids WebView-Renderer (bekommt wenig RAM oder eine Seite reißt ihn mit), baut die App
+  im Hintergrund eine neue WebView und lädt dieselbe Seite neu, statt mit abzustürzen.
 
 ## Auf den Google TV Streamer bringen
 
