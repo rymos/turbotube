@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -51,6 +52,19 @@ object TwitchColors {
     val TextMuted = Color(0xFFADADB8)
     val Live = Color(0xFFEB0400)
 }
+
+/** Button colors like on Twitch; the focused button turns white with dark text so it stays readable. */
+@Composable
+fun twitchButtonColors(primary: Boolean = false) = ButtonDefaults.colors(
+    containerColor = if (primary) TwitchColors.Purple else TwitchColors.SurfaceHigh,
+    contentColor = Color.White,
+    focusedContainerColor = Color.White,
+    focusedContentColor = TwitchColors.Background,
+    pressedContainerColor = Color.White,
+    pressedContentColor = TwitchColors.Background,
+    disabledContainerColor = TwitchColors.SurfaceHigh,
+    disabledContentColor = TwitchColors.TextMuted,
+)
 
 /**
  * A surface the remote can land on, framed in purple when focused like on Twitch. [enabled]
