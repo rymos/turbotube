@@ -69,19 +69,18 @@ fun TurbotubeMenu(
                     color = if (adBlockLoaded) Color(0xFF8BD18B) else Color(0xFFFFB4A9),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (pending != null) {
-                        Button(
-                            enabled = !busy,
-                            onClick = { scope.launch { updater.install(pending) } },
-                            modifier = Modifier.focusRequester(firstButton),
-                        ) { Text("Update installieren") }
-                    } else {
-                        Button(
-                            enabled = !busy,
-                            onClick = { scope.launch { updater.check() } },
-                            modifier = Modifier.focusRequester(firstButton),
-                        ) { Text("Nach Updates suchen") }
-                    }
+                    // One button that changes its label, so the focus stays on it when the
+                    // search finds an update. It is never disabled for the same reason.
+                    Button(
+                        onClick = {
+                            if (!busy) {
+                                scope.launch {
+                                    if (pending != null) updater.install(pending) else updater.check()
+                                }
+                            }
+                        },
+                        modifier = Modifier.focusRequester(firstButton),
+                    ) { Text(if (pending != null) "Update installieren" else "Nach Updates suchen") }
                     Button(onClick = onReload) { Text("YouTube neu laden") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

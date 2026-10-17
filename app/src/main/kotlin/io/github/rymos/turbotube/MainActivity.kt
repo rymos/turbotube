@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
                         updater = container.updater,
                         adBlockLoaded = adBlockLoaded,
                         onReload = {
-                            menuOpen = false
+                            closeMenu()
                             webView.reload()
                         },
                         onExit = { finish() },
@@ -85,10 +85,7 @@ class MainActivity : ComponentActivity() {
 
             // Look for a new Turbotube version once per start and offer it right away
             container.updater.check(quiet = true)
-            if (container.updater.state is UpdateState.Available) {
-                menuOpen = true
-                checkAdBlock()
-            }
+            if (container.updater.state is UpdateState.Available) openMenu()
         }
     }
 
@@ -182,8 +179,7 @@ class MainActivity : ComponentActivity() {
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             backLongPressed = true
-            menuOpen = !menuOpen
-            if (menuOpen) checkAdBlock() else webView.requestFocus()
+            if (menuOpen) closeMenu() else openMenu()
             return true
         }
         return super.onKeyLongPress(keyCode, event)
@@ -204,8 +200,17 @@ class MainActivity : ComponentActivity() {
         webView.evaluateJavascript("!!window.__ttOk") { adBlockLoaded = it == "true" }
     }
 
+    // While the menu is open the WebView must not take focus, or the remote steers YouTube
+    // behind the menu as soon as the focused menu button changes.
+    private fun openMenu() {
+        webView.isFocusable = false
+        menuOpen = true
+        checkAdBlock()
+    }
+
     private fun closeMenu() {
         menuOpen = false
+        webView.isFocusable = true
         webView.requestFocus()
     }
 
