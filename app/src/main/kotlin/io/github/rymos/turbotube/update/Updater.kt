@@ -137,7 +137,12 @@ class Updater(private val context: Context, private val http: OkHttpClient) {
 
     internal fun onInstallResult(status: Int, message: String?) {
         state = when (status) {
-            PackageInstaller.STATUS_SUCCESS -> UpdateState.UpToDate
+            // The installed build is the one we were offering; forget it or the menu keeps
+            // offering the same update.
+            PackageInstaller.STATUS_SUCCESS -> {
+                lastFound = null
+                UpdateState.UpToDate
+            }
             PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateState.Idle
             PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
                 UpdateState.Failed(
