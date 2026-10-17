@@ -190,18 +190,29 @@ class TwitchApi(private val http: OkHttpClient) {
 
     /**
      * The channels the signed-in account follows, live ones with their stream. [token] comes from
-     * [TwitchAuth]; it belongs to Twitch's TV app, so the request goes out as that app.
+     * [TwitchAuth]; it belongs to Twitch's TV app. Twitch's web API sometimes hides the account
+     * from that app, so Twitch's public API (Helix) with the same token is the second way.
      */
     suspend fun followedChannels(token: String): List<TwitchChannel> {
+        val viaGql = runCatching { followedViaGql(token) }
+        viaGql.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val viaHelix = runCatching { followedViaHelix(token) }
+        // An empty list from the web API is no proof: it may just hide the account. Helix decides.
+        return viaHelix.getOrElse { throw it }
+    }
+
+    private suspend fun followedViaGql(token: String): List<TwitchChannel> {
         val result = ArrayList<TwitchChannel>()
         var after: String? = null
         repeat(MAX_FOLLOW_PAGES) {
-            val page = query(
+            val me = query(
                 "query(\$after: Cursor) { currentUser { follows(first: 100, after: \$after) { " +
                     "edges { cursor node { $USER_FIELDS } } pageInfo { hasNextPage } } } }",
                 *listOfNotNull(after?.let { "after" to it }).toTypedArray(),
                 token = token,
-            ).path("currentUser", "follows")
+            ).path("currentUser")
+            if (me !is JsonObject) throw TwitchException("Twitch gibt das Konto nicht heraus.")
+            val page = me.path("follows")
             val edges = page.path("edges").array()
             result += edges.mapNotNull { user(it.path("node")) }
             val more = (page.path("pageInfo").path("hasNextPage") as? JsonPrimitive)?.contentOrNull == "true"
@@ -209,6 +220,34 @@ class TwitchApi(private val http: OkHttpClient) {
             if (!more || after == null) return result
         }
         return result
+    }
+
+    /** Needs the "user:read:follows" permission, which sign-ins since this version ask for. */
+    private suspend fun followedViaHelix(token: String): List<TwitchChannel> {
+        val check = getJson("https://id.twitch.tv/oauth2/validate", "Authorization" to "OAuth $token")
+        val userId = check.string("user_id") ?: throw TwitchException("Twitch kennt die Anmeldung nicht mehr.")
+        val clientId = check.string("client_id") ?: TwitchAuth.CLIENT_ID
+        val scopes = check.path("scopes").array().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        if (TwitchAuth.FOLLOWS_SCOPE !in scopes) {
+            throw TwitchException("Bitte unter „Konto“ einmal abmelden und neu verbinden, dann darf Turbotube die Liste lesen.")
+        }
+        val logins = ArrayList<String>()
+        var after: String? = null
+        var pages = 0
+        do {
+            val url = "https://api.twitch.tv/helix/channels/followed".toHttpUrl().newBuilder()
+                .addQueryParameter("user_id", userId)
+                .addQueryParameter("first", "100")
+                .apply { after?.let { addQueryParameter("after", it) } }
+                .build().toString()
+            val page = getJson(url, "Client-Id" to clientId, "Authorization" to "Bearer $token")
+            logins += page.path("data").array().mapNotNull { it.string("broadcaster_login") }
+            after = page.path("pagination").string("cursor")
+        } while (after != null && ++pages < MAX_FOLLOW_PAGES)
+        // Helix only knows the names; the rest (live, title, picture) comes like for saved channels
+        return coroutineScope {
+            logins.distinct().chunked(100).map { async { channels(it) } }.awaitAll().flatten()
+        }
     }
 
     private suspend fun query(text: String, vararg variables: Pair<String, Any>, token: String? = null): JsonElement {
@@ -245,6 +284,8 @@ class TwitchApi(private val http: OkHttpClient) {
             builder.header("Client-ID", TwitchAuth.CLIENT_ID)
                 .header("User-Agent", TwitchAuth.USER_AGENT)
                 .header("Authorization", "OAuth $token")
+                .header("Origin", TwitchAuth.ORIGIN)
+                .header("Referer", "${TwitchAuth.ORIGIN}/")
         }
         val request = builder.build()
         http.newCall(request).execute().use { response ->
@@ -262,6 +303,19 @@ class TwitchApi(private val http: OkHttpClient) {
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw TwitchException("Stream nicht verfügbar (Fehler ${response.code}).")
             response.body.string()
+        }
+    }
+
+    private suspend fun getJson(url: String, vararg headers: Pair<String, String>): JsonElement = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.build()
+        http.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            val answer = runCatching { json.parseToJsonElement(text) }.getOrNull()
+            if (!response.isSuccessful) {
+                val reason = answer?.string("message") ?: "Fehler ${response.code}"
+                throw TwitchException("Twitch gibt die Liste nicht heraus ($reason).")
+            }
+            answer ?: throw TwitchException("Twitch antwortet nicht wie erwartet.")
         }
     }
 

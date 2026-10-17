@@ -28,14 +28,19 @@ data class TwitchAccount(val token: String, val login: String, val userId: Strin
 /**
  * Signs in with a code, like Twitch's own TV app: the TV shows a code, the viewer enters it on
  * twitch.tv/activate on their phone. The password never touches the TV. The token is the one
- * Twitch's TV app gets, without extra permissions.
+ * Twitch's TV app gets, with read access to the followed channels only.
  */
 class TwitchAuth(private val http: OkHttpClient) {
     /** Twitch expects the same device id on every call of one sign-in, like its app sends. */
     private val deviceId = List(32) { "0123456789abcdef".random() }.joinToString("")
 
     suspend fun start(): DeviceLogin {
-        val answer = when (val reply = post("https://id.twitch.tv/oauth2/device", "client_id" to CLIENT_ID, "scopes" to "")) {
+        var reply = post("https://id.twitch.tv/oauth2/device", "client_id" to CLIENT_ID, "scopes" to FOLLOWS_SCOPE)
+        if (reply is Reply.Refused && "scope" in reply.reason) {
+            // Without the permission the sign-in still works; the list then comes from the web API only
+            reply = post("https://id.twitch.tv/oauth2/device", "client_id" to CLIENT_ID, "scopes" to "")
+        }
+        val answer = when (reply) {
             is Reply.Ok -> reply.body
             is Reply.Refused -> throw TwitchException("Twitch lehnt die Anmeldung gerade ab: ${reply.reason}")
         }
@@ -148,7 +153,10 @@ class TwitchAuth(private val http: OkHttpClient) {
         const val CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa"
         const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; Google TV Streamer) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-        private const val ORIGIN = "https://android.tv.twitch.tv"
+        const val ORIGIN = "https://android.tv.twitch.tv"
+
+        /** Lets Twitch's public API list the channels the account follows. */
+        const val FOLLOWS_SCOPE = "user:read:follows"
 
         private val json = Json { ignoreUnknownKeys = true }
     }
