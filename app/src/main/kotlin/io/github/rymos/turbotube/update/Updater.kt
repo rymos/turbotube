@@ -46,10 +46,15 @@ class Updater(private val context: Context, private val http: OkHttpClient) {
     var lastFound by mutableStateOf<AppUpdate?>(null)
         private set
 
+    /** When the last look at GitHub happened; 0 while the app has not looked yet this run. */
+    var lastCheckAt by mutableStateOf(0L)
+        private set
+
     val currentBuild: Int get() = BuildConfig.BUILD_NUMBER
 
     suspend fun check(quiet: Boolean = false) {
         if (state is UpdateState.Downloading || state is UpdateState.Installing) return
+        lastCheckAt = System.currentTimeMillis()
         if (!quiet) state = UpdateState.Checking
         state = try {
             val update = UpdateChecker.check(http, currentBuild)
