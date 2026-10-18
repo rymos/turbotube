@@ -1,77 +1,93 @@
 # Turbotube
 
-YouTube und Twitch für den Fernseher, ohne Werbung, mit SponsorBlock. Gebaut für den **Google TV Streamer 4K**,
-läuft aber auf jedem Android-TV- oder Google-TV-Gerät ab Android 8.
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/rymos/turbotube?label=release)](https://github.com/rymos/turbotube/releases/latest)
+[![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#requirements)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)](#build)
 
-Die App zeigt YouTubes eigene TV-Oberfläche (youtube.com/tv) und lädt darüber ein Skript, das die
-Werbung entfernt. Deshalb sieht alles exakt aus wie die YouTube-App, mit Anmeldung, Abos, Verlauf und
-allen Einstellungen.
+YouTube and Twitch on your TV, ad-free, with SponsorBlock. Built for the **Google TV Streamer 4K**
+and runs on any Android TV or Google TV device from Android 8.0 up.
 
-- Werbung entfernt, SponsorBlock, DeArrow, Wiedergabegeschwindigkeit (einstellbar in YouTube unter
-  Einstellungen)
-- Werbe- und Statistik-Adressen werden in der App gesperrt (siehe `TrackerBlocker`). Wiedergabezeit
-  und Verlauf gehen weiter an YouTube, sonst gäbe es keinen Verlauf und kein „Weiterschauen“.
-- **Twitch** mit Twitch-typischer TV-Oberfläche (Startseite mit Reihen, Folge ich, Durchsuchen,
-  Suche), Chat neben dem Stream und Werbefilter. Ein Twitch-Konto ist nicht nötig; wer will, verbindet
-  es unter „Konto“ mit einem Code auf twitch.tv/activate und hat dann seine gefolgten Kanäle drin. Umschalten über das Turbotube-Menü: Zurück-Taste gedrückt halten →
-  „Zu Twitch wechseln“. Die App startet dort, wo du zuletzt warst.
-- Eingebaute Updates: Ist eine neue Version da, liegt beim Start, bei jedem Wechsel zwischen
-  YouTube und Twitch und immer wenn die App wieder in den Vordergrund kommt ein Streifen mit
-  „Jetzt installieren“ oben im Bild — ein Druck auf OK genügt, „Später“ oder Zurück lässt ihn
-  liegen. Solange die App offen bleibt, schaut sie alle 30 Minuten nach. Darunter steht, was der neue Build mitbringt; der
-  Workflow schreibt die Commit-Titel als Release-Text mit. Sonst gibt es im Turbotube-Menü (Zurück-Taste gedrückt
-  halten) weiter „Nach Updates suchen“.
+Turbotube renders YouTube's own TV interface (`youtube.com/tv`) in a WebView and injects a script
+that removes the ads. The result looks exactly like the official YouTube app — sign-in,
+subscriptions, watch history and all settings included.
 
-## So funktioniert es
+> Turbotube is an unofficial project. It is not affiliated with, endorsed by, or supported by
+> Google, YouTube, Twitch or Amazon.
 
-- `MainActivity` zeigt youtube.com/tv in einem WebView mit dem Browser-Kennzeichen eines Samsung-TVs
-  und gibt die Fernbedienung weiter (Zurück wird als Escape an YouTube geschickt).
-- `TizenTubeScript` liefert das Skript in einer festen Version mit der APK aus (der Workflow lädt es
-  von npm, prüft die SHA-256-Prüfsumme und legt es unter `app/src/main/assets` ab). Die App prüft die
-  Kopie erneut und legt sie auf dem Gerät ab; ohne mitgeliefertes Skript lädt sie es aus dem eigenen
-  Release, erst danach von npm. Es läuft, bevor YouTubes eigene Skripte starten.
-- `core/` enthält die Update-Prüfung gegen die GitHub-Releases, mit Tests. Sie liest die letzten
-  Releases und nimmt den höchsten Build — „das neueste Release“ wäre nicht dasselbe.
-- `twitch/` ist die Twitch-Seite: eine eigene Oberfläche in Compose und ein Media3-Player.
-  `core/twitch/TwitchApi` fragt Twitchs Web-Schnittstelle anonym ab und sucht für jeden Stream einen
-  Zugang, der gerade keine Werbung trägt. Was trotzdem an Werbung im Stream steckt, schneidet
-  `PlaylistCleaner` aus der Wiedergabeliste, bevor der Player sie sieht (mit Tests).
-- Links, die nicht zu YouTube gehören, öffnet die App im System-Browser statt im WebView.
-- Stirbt Androids WebView-Renderer (bekommt wenig RAM oder eine Seite reißt ihn mit), baut die App
-  im Hintergrund eine neue WebView und lädt dieselbe Seite neu, statt mit abzustürzen.
+## Features
 
-## Auf den Google TV Streamer bringen
+- **Ad-free YouTube** through the bundled [TizenTube](https://github.com/reisxd/TizenTube) user
+  script, plus SponsorBlock, DeArrow and playback speed (configurable inside YouTube under
+  Settings).
+- **Ad and telemetry hosts are blocked** in the app (see `TrackerBlocker`). Playback time and watch
+  history still reach YouTube — that is what makes the "Continue watching" row work.
+- **Twitch** with a native TV-style UI (home rows, Following, Browse, Search), chat next to the
+  stream and an ad filter. No Twitch account is required; you can connect one under "Account" with
+  a code from `twitch.tv/activate` to get your followed channels. Switch with the Turbotube menu:
+  hold Back → "Switch to Twitch". The app reopens on the last used side.
+- **Built-in updates.** When a new build is out, a strip with "Install now" appears on start, on
+  every switch between YouTube and Twitch, and whenever the app returns to the foreground. Press OK
+  to install, "Later" or Back to dismiss. While the app stays open it re-checks every 30 minutes.
+  The strip also lists what the new build brings — the workflow writes the commit subjects into the
+  release body. "Check for updates" in the Turbotube menu still works as a manual trigger.
 
-1. **Entwickleroptionen einschalten:** Einstellungen → System → Info → sieben Mal auf
-   „Android TV OS-Build“ drücken.
-2. **App „Downloader“** (von AFTVnews) aus dem Play Store installieren.
-3. **Unbekannte Apps erlauben:** Einstellungen → Apps → Sicherheit und Einschränkungen →
-   Unbekannte Quellen → „Downloader“ einschalten.
-4. In Downloader diesen Link eintippen und „Installieren“ wählen:
+## How it works
+
+- `MainActivity` shows `youtube.com/tv` in a WebView with a Samsung TV user agent and forwards
+  remote control events (Back is sent to YouTube as Escape).
+- `TizenTubeScript` ships the script in a pinned version inside the APK. The workflow downloads it
+  from npm, verifies its SHA-256 and places it in `app/src/main/assets`; the app verifies the copy
+  again, stores it on the device, and falls back to the app's own release and then npm if no
+  bundled copy exists. It runs before YouTube's own scripts.
+- `core/` holds the update checker that reads the GitHub releases, with tests. It evaluates the
+  recent releases and picks the highest build — "the newest release" is not the same thing.
+- `twitch/` is the Twitch side: a custom Compose UI plus a Media3 player. `core/twitch/TwitchApi`
+  queries Twitch's internal API anonymously and looks for a playback access point that currently
+  carries no ads. Ads that still slip into the stream are cut out of the playlist by
+  `PlaylistCleaner` before the player sees it (covered by tests).
+- Links outside YouTube open in the system browser instead of the WebView.
+- If Android's WebView renderer dies (low memory, or a page takes it down), the app builds a fresh
+  WebView in the background and reloads the same page instead of crashing.
+
+## Requirements
+
+- Android TV or Google TV, Android 8.0 (API 26) or newer.
+- To build: JDK 21 and the Android SDK (`compileSdk` 37, `targetSdk` 35).
+
+## Install
+
+1. **Enable developer options:** Settings → System → About → press "Android TV OS build"
+   seven times.
+2. **Install "Downloader"** (by AFTVnews) from the Play Store.
+3. **Allow unknown apps:** Settings → Apps → Security & restrictions → Unknown sources →
+   enable "Downloader".
+4. Type this URL into Downloader and choose "Install":
    `https://github.com/rymos/turbotube/releases/latest/download/turbotube.apk`
-5. Turbotube erscheint danach in der App-Leiste unter „Apps“.
+5. Turbotube then shows up in the app row under "Apps".
 
-Alternative für Leute mit Computer: In den Entwickleroptionen „Debugging über WLAN“ einschalten, dann
-`adb connect <IP-des-Streamers>` und `adb install turbotube.apk`.
+With a computer at hand: enable "Wireless debugging" in developer options, then
+`adb connect <device-ip>` and `adb install turbotube.apk`.
 
-**Updates** gehen danach direkt in der App: Zurück-Taste gedrückt halten → **Nach Updates suchen** →
-**Update installieren**.
-Beim ersten Mal fragt Android, ob Turbotube Apps installieren darf. Das klappt nur, wenn alte und neue
-APK mit demselben Schlüssel signiert sind (siehe „Signaturschlüssel“ unten).
+### Updating
 
-## Bauen
+Updates install from inside the app: hold Back → **Check for updates** → **Install update**. On the
+first run Android asks whether Turbotube may install apps. This only works if the old and the new
+APK are signed with the same key (see [Signing key](#signing-key)).
 
-Jeder Push auf `main` baut über GitHub Actions eine APK und veröffentlicht sie als Release `build-<n>`.
-`n` ist die Laufnummer von GitHub Actions und zugleich der `versionCode` der APK; danach richtet sich
-der Update-Knopf in der App.
+## Build
 
-Lokal: JDK 21 und das Android SDK installieren, dann
+Every push to `main` builds an APK through GitHub Actions and publishes it as release `build-<n>`.
+`n` is the GitHub Actions run number and also the APK's `versionCode`; the in-app update button
+relies on it.
+
+Locally: install JDK 21 and the Android SDK, then
 
 ```sh
 ./gradlew :core:test :app:assembleRelease
 ```
 
-Wer das Werbe-Skript lokal mitbauen will, legt es vorher dorthin (der Workflow macht genau das):
+To build the ad-removal script locally, fetch it into place first (this is what the workflow does):
 
 ```sh
 mkdir -p app/src/main/assets
@@ -79,55 +95,56 @@ curl -fsSL -o app/src/main/assets/tizentube-1.15.1.js \
   https://cdn.jsdelivr.net/npm/@foxreis/tizentube@1.15.1/dist/userScript.js
 ```
 
-Ohne die Datei baut die App trotzdem; sie lädt das Skript dann beim ersten Start aus dem Netz.
+The app still builds without that file; it then downloads the script from the network on first
+start.
 
-### Signaturschlüssel
+### Signing key
 
-Ohne eigenen Schlüssel wird die Release-APK mit dem Debug-Schlüssel des jeweiligen Rechners signiert.
-Damit Updates sich über die installierte Version legen lassen, einmal einen Schlüssel erzeugen
+Without a custom key the release APK is signed with the debug key of the machine that built it.
+To make updates install over the existing app, create a key once:
 
 ```sh
 keytool -genkeypair -v -keystore turbotube.jks -alias turbotube -keyalg RSA -keysize 4096 -validity 10000
 base64 -w0 turbotube.jks
 ```
 
-und als Secrets hinterlegen: `TURBOTUBE_KEYSTORE_BASE64` (die base64-Ausgabe),
+and store it as secrets: `TURBOTUBE_KEYSTORE_BASE64` (the base64 output),
 `TURBOTUBE_KEYSTORE_PASSWORD`, `TURBOTUBE_KEY_ALIAS` (`turbotube`), `TURBOTUBE_KEY_PASSWORD`.
 
-Ein Build für `main` **bricht ab**, wenn kein Schlüssel hinterlegt ist, statt eine debug-signierte
-APK zu veröffentlichen — die ließe sich nie wieder updaten. Ein lokaler Build ohne Schlüssel geht
-weiterhin und ist dann debug-signiert (nur zum Ausprobieren).
+A build for `main` **fails** when no key is configured instead of publishing a debug-signed APK —
+that one could never be updated again. A local build without a key still works and is
+debug-signed (for trying things out only).
 
-Releases tragen immer den Tag `build-<n>`. Ein Release mit einem anderen Tag (`v1.0` o. ä.) wird vom
-Update-Knopf ignoriert, weil ihm die Build-Nummer fehlt.
+Releases always carry the tag `build-<n>`. A release with any other tag (`v1.0` and the like) is
+ignored by the update button, because it has no build number.
 
-## Bedienung
+## Usage
 
-- Alles wie in der YouTube-App. Anmelden in YouTube unter „Anmelden“, dann den angezeigten Code auf dem Handy eingeben.
-- **Zurück gedrückt halten:** Turbotube-Menü (Updates, neu laden, YouTube/Twitch wechseln, Beenden)
-- **Twitch:** Links die Leiste mit Startseite, Folge ich, Durchsuchen und Suche; OK startet einen
-  Stream. Im Stream öffnet OK die Leiste mit Folgen, Chat ein/aus und Qualität, Zurück beendet den
-  Stream. „Folgen“ speichert den Kanal nur auf dem Gerät, nicht im Twitch-Konto. „Bild“ wechselt
-  zwischen Einpassen, Verkleinert (falls der Fernseher die Ränder abschneidet), Gestreckt und Zoom.
+- Everything works like the YouTube app. Sign in under "Sign in", then enter the shown code on your
+  phone.
+- **Hold Back:** Turbotube menu (updates, reload, switch YouTube/Twitch, quit).
+- **Twitch:** the left rail has Home, Following, Browse and Search; OK starts a stream. Inside a
+  stream OK opens the overlay with follow, chat on/off and quality, Back stops the stream.
+  "Follow" stores the channel on the device only, not in the Twitch account. "Picture" cycles
+  between Fit, Shrink (if the TV cuts off the edges), Stretch and Zoom.
 
-## Grenzen
+## Limitations
 
-- Ob YouTube im WebView 4K anbietet, hängt vom Gerät ab; im schlimmsten Fall ist bei 1080p Schluss.
-- Casting vom Handy auf den Fernseher geht nicht.
-- Twitch fügt Werbung direkt in den Videostrom ein. Turbotube nimmt einen Zugang ohne Werbung, wenn es
-  einen gibt, und schneidet sonst die Werbeschnipsel heraus; dann steht das Bild kurz mit dem Hinweis
-  „Werbepause“, bis der Stream weitergeht. Weil Twitch das immer wieder ändert, kann der Filter
-  zeitweise schlechter greifen, bis er angepasst ist. Ist ein werbefreier Zugang nur in niedriger
-  Qualität verfügbar, wechselt der Player später von selbst zurück auf volle Qualität.
-- Twitch: Chat nur lesen (Emotes erscheinen als Text), keine Videos auf Abruf. Mit verbundenem Konto
-  liest die App nur die Liste der gefolgten Kanäle; Streams laufen weiter ohne Anmeldung. Folgen und
-  Entfolgen im Twitch-Konto selbst geht nur bei Twitch.
-- Googles eigene Oberfläche lädt weiterhin Googles Skripte; gesperrt werden nur die bekannten
-  Werbe- und Statistik-Adressen.
+- Whether YouTube offers 4K inside a WebView depends on the device; worst case it stops at 1080p.
+- Casting from a phone to the TV does not work.
+- Twitch inserts ads into the video stream itself. Turbotube picks an access point without ads when
+  one exists and otherwise cuts the ad segments out; the picture then briefly shows "Ad break"
+  until the stream continues. Twitch changes this regularly, so the filter can get worse for a
+  while until it is adjusted. If an ad-free access point is only available in low quality, the
+  player switches back to full quality later on its own.
+- Twitch: chat is read-only (emotes appear as text), no video on demand. With a connected account
+  the app only reads the list of followed channels; streams keep playing without signing in.
+  Following and unfollowing inside the Twitch account only works on Twitch itself.
+- Google's own interface still loads Google's scripts; only the known ad and telemetry hosts are
+  blocked.
 
-## Lizenz
+## License
 
-GPL-3.0-or-later. Das eingebundene Skript ist [TizenTube](https://github.com/reisxd/TizenTube)
-von Reis Can, lizenziert unter GPL-3.0; die App liefert es unverändert mit (Version und Prüfsumme
-stehen in `TizenTubeScript.kt`). Turbotube ist ein inoffizielles Projekt und gehört nicht zu Google,
-YouTube oder Twitch.
+GPL-3.0-or-later. The bundled script is [TizenTube](https://github.com/reisxd/TizenTube) by
+Reis Can, licensed under GPL-3.0; the app ships it unmodified (version and checksum live in
+`TizenTubeScript.kt`).
