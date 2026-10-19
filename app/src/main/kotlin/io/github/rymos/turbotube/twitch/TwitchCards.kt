@@ -107,6 +107,7 @@ fun StreamCard(
     modifier: Modifier = Modifier,
     width: Dp? = null,
     focusRequester: FocusRequester? = null,
+    showViewers: Boolean = true,
 ) {
     val requester = focusRequester ?: remember { FocusRequester() }
     Column(modifier.then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())) {
@@ -118,7 +119,9 @@ fun StreamCard(
                 )
                 if (channel.live) {
                     Badge("LIVE", TwitchColors.Live, Modifier.align(Alignment.TopStart).padding(8.dp))
-                    Badge(viewers(channel.viewers), Color(0xCC000000), Modifier.align(Alignment.BottomStart).padding(8.dp))
+                    if (showViewers) {
+                        Badge(viewers(channel.viewers), Color(0xCC000000), Modifier.align(Alignment.BottomStart).padding(8.dp))
+                    }
                 } else {
                     Badge("Offline", Color(0xCC000000), Modifier.align(Alignment.TopStart).padding(8.dp))
                 }

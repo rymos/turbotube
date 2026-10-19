@@ -6,8 +6,22 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
-/** One line in the chat. [color] is the name colour the viewer picked, as #RRGGBB, if any. */
-data class ChatMessage(val id: Long, val name: String, val color: String?, val text: String, val action: Boolean)
+/** One emote inside a message, at [start]..[end] (inclusive) of [ChatMessage.text], counted in code points. */
+data class ChatEmote(val id: String, val start: Int, val end: Int)
+
+/**
+ * One line in the chat. [color] is the name colour the viewer picked, as #RRGGBB, if any.
+ * [timestamp] is when Twitch received the message (epoch millis), if the message carried it.
+ */
+data class ChatMessage(
+    val id: Long,
+    val name: String,
+    val color: String?,
+    val text: String,
+    val action: Boolean,
+    val emotes: List<ChatEmote> = emptyList(),
+    val timestamp: Long? = null,
+)
 
 /**
  * Reads a channel's chat anonymously, the way Twitch lets logged-out viewers watch it: no
@@ -91,7 +105,32 @@ object ChatParser {
         if (action) text = text.removePrefix("\u0001ACTION ").removeSuffix("\u0001")
         val name = tags["display-name"]?.takeIf { it.isNotBlank() } ?: nick
         val color = tags["color"]?.takeIf { COLOR.matches(it) }
-        return ChatMessage(id, name, color, text, action)
+        return ChatMessage(
+            id = id,
+            name = name,
+            color = color,
+            text = text,
+            action = action,
+            emotes = parseEmotes(tags["emotes"].orEmpty()),
+            timestamp = tags["tmi-sent-ts"]?.toLongOrNull(),
+        )
+    }
+
+    /** `25:0-4,12-16/1902:6-10` → one entry per occurrence. */
+    private fun parseEmotes(value: String): List<ChatEmote> {
+        if (value.isBlank()) return emptyList()
+        return value.split('/').flatMap { entry ->
+            val colon = entry.indexOf(':')
+            if (colon <= 0) return@flatMap emptyList()
+            val id = entry.substring(0, colon)
+            entry.substring(colon + 1).split(',').mapNotNull { range ->
+                val dash = range.indexOf('-')
+                if (dash <= 0) return@mapNotNull null
+                val start = range.substring(0, dash).toIntOrNull() ?: return@mapNotNull null
+                val end = range.substring(dash + 1).toIntOrNull() ?: return@mapNotNull null
+                if (end < start) null else ChatEmote(id, start, end)
+            }
+        }.sortedBy { it.start }
     }
 
     private fun unescape(value: String) = value
