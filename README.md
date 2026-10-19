@@ -123,10 +123,14 @@ ignored by the update button, because it has no build number.
 - Everything works like the YouTube app. Sign in under "Sign in", then enter the shown code on your
   phone.
 - **Hold Back:** Turbotube menu (updates, reload, switch YouTube/Twitch, quit).
-- **Twitch:** the left rail has Home, Following, Browse and Search; OK starts a stream. Inside a
-  stream OK opens the overlay with follow, chat on/off and quality, Back stops the stream.
-  "Follow" stores the channel on the device only, not in the Twitch account. "Picture" cycles
-  between Fit, Shrink (if the TV cuts off the edges), Stretch and Zoom.
+- **Twitch:** the left rail has Home, Following, Browse, Search, Account and Settings; OK starts a
+  stream. Inside a stream OK opens the overlay with follow, chat on/off, quality and picture.
+  Back stops the stream. "Follow" stores the channel on the device only, not in the Twitch account.
+- **Twitch settings:** chat side (left/right), width, font size, line spacing, background opacity,
+  name colours, on/off for emotes with their own size, timestamps and auto-scroll; picture format,
+  quality, overscan border and how long the info bar stays. Also the size of the home cards, the
+  big hero banner and the viewer counts. Left/Right changes a value, OK moves it forward, and the
+  "reset" row restores all defaults. Everything is stored on the device and applies immediately.
 
 ## Limitations
 
@@ -137,7 +141,8 @@ ignored by the update button, because it has no build number.
   until the stream continues. Twitch changes this regularly, so the filter can get worse for a
   while until it is adjusted. If an ad-free access point is only available in low quality, the
   player switches back to full quality later on its own.
-- Twitch: chat is read-only (emotes appear as text), no video on demand. With a connected account
+- Twitch: chat is read-only and shows Twitch's own emotes inline (third-party emotes from BTTV,
+  FFZ and 7TV are not loaded), no video on demand. With a connected account
   the app only reads the list of followed channels; streams keep playing without signing in.
   Following and unfollowing inside the Twitch account only works on Twitch itself.
 - Google's own interface still loads Google's scripts; only the known ad and telemetry hosts are

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,7 +74,6 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 
-private val RowCardWidth = 240.dp
 private val PagePadding = 32.dp
 
 /**
@@ -113,6 +113,7 @@ fun TwitchScreen(controller: TwitchController) {
                         }
                         TwitchPage.Search -> SearchPage(controller, browsing)
                         TwitchPage.Account -> AccountPage(controller, browsing)
+                        TwitchPage.Settings -> TwitchSettingsPage(controller, browsing)
                     }
                 }
             }
@@ -175,6 +176,7 @@ private fun TwitchPage.icon(): ImageVector = when (this) {
     TwitchPage.Browse -> Icons.Filled.Menu
     TwitchPage.Search -> Icons.Filled.Search
     TwitchPage.Account -> Icons.Filled.Person
+    TwitchPage.Settings -> Icons.Filled.Settings
 }
 
 @Composable
@@ -189,14 +191,19 @@ private fun HomePage(controller: TwitchController, enabled: Boolean) {
                 contentPadding = PaddingValues(vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(28.dp),
             ) {
-                rows.popular.firstOrNull()?.let { hero ->
-                    item(key = "hero") { Hero(hero, enabled, play(hero)) }
+                if (rows.popular.isNotEmpty() && controller.settings.showHero.value) {
+                    val hero = rows.popular.first()
+                    item(key = "hero") { Hero(hero, enabled, play(hero), controller.settings.showViewers.value) }
                 }
                 if (rows.following.isNotEmpty()) {
-                    item(key = "following") { StreamRow("Live-Kanäle, denen du folgst", rows.following, enabled, play) }
+                    item(key = "following") {
+                        StreamRow("Live-Kanäle, denen du folgst", rows.following, enabled, play, controller)
+                    }
                 }
                 if (rows.popular.size > 1) {
-                    item(key = "popular") { StreamRow("Beliebte Live-Kanäle", rows.popular.drop(1), enabled, play) }
+                    item(key = "popular") {
+                        StreamRow("Beliebte Live-Kanäle", rows.popular.drop(1), enabled, play, controller)
+                    }
                 }
                 if (rows.categories.isNotEmpty()) {
                     item(key = "categories") {
@@ -214,7 +221,9 @@ private fun HomePage(controller: TwitchController, enabled: Boolean) {
                     }
                 }
                 rows.byCategory.forEach { (category, streams) ->
-                    item(key = "cat:${category.name}") { StreamRow("Live: ${category.displayName}", streams, enabled, play) }
+                    item(key = "cat:${category.name}") {
+                        StreamRow("Live: ${category.displayName}", streams, enabled, play, controller)
+                    }
                 }
             }
         }
@@ -223,7 +232,12 @@ private fun HomePage(controller: TwitchController, enabled: Boolean) {
 
 /** The big first stream on the start page. */
 @Composable
-private fun Hero(channel: TwitchChannel, enabled: Boolean, onClick: (FocusRequester) -> Unit) {
+private fun Hero(
+    channel: TwitchChannel,
+    enabled: Boolean,
+    onClick: (FocusRequester) -> Unit,
+    showViewers: Boolean,
+) {
     val requester = remember { FocusRequester() }
     Row(
         Modifier.padding(horizontal = PagePadding).height(220.dp),
@@ -246,7 +260,9 @@ private fun Hero(channel: TwitchChannel, enabled: Boolean, onClick: (FocusReques
             Spacer(Modifier.height(12.dp))
             Text(channel.title, color = TwitchColors.Text, fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(8.dp))
-            Text(viewers(channel.viewers), color = TwitchColors.TextMuted, fontSize = 13.sp)
+            if (showViewers) {
+                Text(viewers(channel.viewers), color = TwitchColors.TextMuted, fontSize = 13.sp)
+            }
         }
     }
 }
@@ -257,6 +273,7 @@ private fun StreamRow(
     streams: List<TwitchChannel>,
     enabled: Boolean,
     play: (TwitchChannel) -> (FocusRequester) -> Unit,
+    controller: TwitchController,
 ) {
     Column {
         RowTitle(title)
@@ -264,7 +281,15 @@ private fun StreamRow(
             contentPadding = PaddingValues(horizontal = PagePadding),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(streams, key = { it.login }) { StreamCard(it, enabled, play(it), width = RowCardWidth) }
+            items(streams, key = { it.login }) {
+                StreamCard(
+                    it,
+                    enabled,
+                    play(it),
+                    width = controller.settings.cardSize.value.width,
+                    showViewers = controller.settings.showViewers.value,
+                )
+            }
         }
     }
 }
@@ -307,7 +332,7 @@ private fun FollowingPage(controller: TwitchController, enabled: Boolean) {
                 if (live.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Live") }
                     items(live, key = { it.login }) { channel ->
-                        StreamCard(channel, enabled, { controller.play(channel, it) })
+                        StreamCard(channel, enabled, { controller.play(channel, it) }, showViewers = controller.settings.showViewers.value)
                     }
                 }
                 if (offline.isNotEmpty()) {
@@ -359,7 +384,7 @@ private fun CategoryPage(controller: TwitchController, category: TwitchCategory,
             Load.Loading -> item(span = { GridItemSpan(maxLineSpan) }) { Hint("Lädt …") }
             is Load.Failed -> item(span = { GridItemSpan(maxLineSpan) }) { Hint(load.message) }
             is Load.Done -> items(load.value, key = { it.login }) { channel ->
-                StreamCard(channel, enabled, { controller.play(channel, it) })
+                StreamCard(channel, enabled, { controller.play(channel, it) }, showViewers = controller.settings.showViewers.value)
             }
         }
     }
@@ -405,7 +430,7 @@ private fun SearchPage(controller: TwitchController, enabled: Boolean) {
                 item(span = { GridItemSpan(maxLineSpan) }) { Hint("Keine Kanäle gefunden.") }
             } else {
                 items(load.value, key = { it.login }) { channel ->
-                    StreamCard(channel, enabled, { controller.play(channel, it) })
+                    StreamCard(channel, enabled, { controller.play(channel, it) }, showViewers = controller.settings.showViewers.value)
                 }
             }
         }

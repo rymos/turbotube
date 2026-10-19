@@ -35,12 +35,12 @@ enum class TwitchPage(val label: String) {
     Browse("Durchsuchen"),
     Search("Suche"),
     Account("Konto"),
+    Settings("Einstellungen"),
 }
 
-/** How the stream fills the screen. */
-enum class PictureFit(val label: String) {
+/** How the stream fills the screen. Overscan insets are a separate setting. */
+enum class PictureFit(override val label: String) : Labelled {
     Fit("Einpassen"),
-    Shrink("Verkleinert"),
     Stretch("Gestreckt"),
     Zoom("Zoom"),
 }
@@ -72,6 +72,9 @@ class TwitchController(
 ) {
     private val prefs = context.getSharedPreferences("twitch", Context.MODE_PRIVATE)
 
+    /** All Twitch adjustments: chat layout, picture, quality, page look. */
+    val settings = TwitchSettings(prefs)
+
     var page by mutableStateOf(TwitchPage.Home)
         private set
     var home by mutableStateOf<Load<HomeRows>>(Load.Loading)
@@ -92,13 +95,10 @@ class TwitchController(
         private set
     var playerPanelOpen by mutableStateOf(false)
 
-    var chatVisible by mutableStateOf(prefs.getBoolean(KEY_CHAT, true))
-        private set
+    /** Kept as reading accessors so the player keeps its short names. */
+    val chatVisible: Boolean get() = settings.chatVisible.value
 
-    var pictureFit by mutableStateOf(
-        PictureFit.entries.firstOrNull { it.name == prefs.getString(KEY_FIT, null) } ?: PictureFit.Fit,
-    )
-        private set
+    val pictureFit: PictureFit get() = settings.pictureFit.value
 
     /** The connected Twitch account; its followed channels show up next to the ones saved here. */
     var account by mutableStateOf<TwitchAccount?>(
@@ -115,8 +115,7 @@ class TwitchController(
     private var signInJob: Job? = null
 
     /** Highest picture height, or null for automatic. */
-    var maxHeight by mutableStateOf(prefs.getInt(KEY_QUALITY, 0).takeIf { it > 0 })
-        private set
+    val maxHeight: Int? get() = settings.quality.value.takeIf { it > 0 }
 
     /** False while Turbotube's menu lies on top, so the remote can't wander behind it. */
     var interactive by mutableStateOf(true)
@@ -131,12 +130,16 @@ class TwitchController(
 
     private var job: Job? = null
 
+    /** Where the settings page came from, so Back returns there. */
+    private var lastPage = TwitchPage.Home
+
     fun restoreFocus() {
         focusRequests++
     }
 
     fun select(newPage: TwitchPage) {
         if (newPage == page && category == null) return
+        if (page != newPage) lastPage = page
         page = newPage
         category = null
         refresh()
@@ -155,6 +158,7 @@ class TwitchController(
                     following = load { allFollowed() }
                 }
                 TwitchPage.Account -> Unit
+                TwitchPage.Settings -> Unit
                 TwitchPage.Browse -> {
                     val open = category
                     if (open != null) {
@@ -233,24 +237,14 @@ class TwitchController(
         following = Load.Loading
     }
 
-    fun nextPictureFit() {
-        pictureFit = PictureFit.entries[(pictureFit.ordinal + 1) % PictureFit.entries.size]
-        prefs.edit().putString(KEY_FIT, pictureFit.name).apply()
-    }
+    fun nextPictureFit() = settings.pictureFit.next(1)
 
     fun isFollowed(login: String) = favorites.contains(login) || login in accountFollows
 
-    fun toggleChat() {
-        chatVisible = !chatVisible
-        prefs.edit().putBoolean(KEY_CHAT, chatVisible).apply()
-    }
+    fun toggleChat() = settings.chatVisible.toggle()
 
     /** Auto → 1080p → 720p → 480p → 360p → Auto. */
-    fun nextQuality() {
-        val steps = listOf(null, 1080, 720, 480, 360)
-        maxHeight = steps[(steps.indexOf(maxHeight) + 1) % steps.size]
-        prefs.edit().putInt(KEY_QUALITY, maxHeight ?: 0).apply()
-    }
+    fun nextQuality() = settings.quality.next(1)
 
     /** Short press of Back. False when there is nothing left to go back to. */
     fun back(): Boolean = when {
@@ -266,6 +260,12 @@ class TwitchController(
             playing = null
             // Following may have changed while watching
             if (page == TwitchPage.Following || page == TwitchPage.Home) refresh()
+            true
+        }
+        page == TwitchPage.Settings -> {
+            val back = if (lastPage == TwitchPage.Settings) TwitchPage.Home else lastPage
+            select(back)
+            restoreFocus()
             true
         }
         category != null -> {
@@ -324,9 +324,6 @@ class TwitchController(
     }
 
     private companion object {
-        const val KEY_CHAT = "chat"
-        const val KEY_QUALITY = "quality"
-        const val KEY_FIT = "fit"
         const val KEY_TOKEN = "token"
         const val KEY_LOGIN = "login"
         const val CATEGORY_ROWS = 4
