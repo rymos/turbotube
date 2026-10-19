@@ -131,6 +131,8 @@ ignored by the update button, because it has no build number.
   quality, overscan border and how long the info bar stays. Also the size of the home cards, the
   big hero banner and the viewer counts. Left/Right changes a value, OK moves it forward, and the
   "reset" row restores all defaults. Everything is stored on the device and applies immediately.
+  During a stream the same panel opens with "Settings" in the info bar, so picture format,
+  overscan and chat size can be judged on the live picture.
 
 ## Limitations
 
