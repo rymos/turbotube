@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,8 +47,12 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +71,12 @@ import androidx.tv.material3.Text
 import io.github.rymos.turbotube.core.twitch.ChatMessage
 import io.github.rymos.turbotube.core.twitch.TwitchChannel
 import io.github.rymos.turbotube.core.twitch.TwitchChat
+import io.github.rymos.turbotube.core.twitch.parts
+import io.github.rymos.turbotube.ui.RemoteImage
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * A running stream, laid out like Twitch: the picture, the chat on the right, and on OK the info
@@ -110,18 +123,22 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
     }
 
     LaunchedEffect(Unit) {
-        delay(INFO_VISIBLE_MS)
-        showInfo = false
+        val hideAfter = controller.settings.infoBar.value.millis
+        if (hideAfter > 0) {
+            delay(hideAfter)
+            showInfo = false
+        }
     }
     LaunchedEffect(controller.playerPanelOpen, controller.focusRequests) {
         runCatching { if (controller.playerPanelOpen) panelFocus.requestFocus() else screenFocus.requestFocus() }
     }
 
-    Row(Modifier.fillMaxSize().background(Color.Black)) {
+    val inset = controller.settings.overscan.value
+    val chatLeft = controller.settings.chatSide.value == ChatSide.Left
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         Box(
             Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
                 .focusProperties { canFocus = active }
                 .focusRequester(screenFocus)
                 .onKeyEvent {
@@ -145,9 +162,13 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                     }
                 },
                 update = { it.resizeMode = controller.pictureFit.resizeMode() },
-                // Some TVs cut the edges off (overscan); "Verkleinert" keeps the picture inside
+                // Some TVs cut the edges off (overscan); the setting insets the picture
                 modifier = Modifier.fillMaxSize().then(
-                    if (controller.pictureFit == PictureFit.Shrink) Modifier.padding(horizontal = 40.dp, vertical = 24.dp) else Modifier,
+                    if (inset != Overscan.Off) {
+                        Modifier.padding(horizontal = inset.horizontal, vertical = inset.vertical)
+                    } else {
+                        Modifier
+                    },
                 ),
             )
 
@@ -160,12 +181,28 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                 is TwitchPlayer.State.Failed -> Notice(current.message, Modifier.align(Alignment.Center))
                 TwitchPlayer.State.Playing -> Unit
             }
-
-            if (controller.playerPanelOpen || showInfo) {
-                InfoBar(controller, channel, controlsVisible = controller.playerPanelOpen, panelFocus, active, Modifier.align(Alignment.BottomStart))
-            }
         }
-        if (controller.chatVisible) ChatPanel(controller, channel.login)
+
+        if (controller.chatVisible) {
+            ChatPanel(
+                controller,
+                channel,
+                Modifier.align(if (chatLeft) Alignment.CenterStart else Alignment.CenterEnd),
+            )
+        }
+
+        if (controller.playerPanelOpen || showInfo) {
+            InfoBar(
+                controller,
+                channel,
+                controlsVisible = controller.playerPanelOpen,
+                firstButton = panelFocus,
+                active = active,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = if (controller.chatVisible && chatLeft) controller.settings.chatWidth.value.width else 0.dp),
+            )
+        }
     }
 }
 
@@ -247,16 +284,18 @@ private fun InfoBar(
                     colors = twitchButtonColors(),
                 ) { Text("Bild: " + controller.pictureFit.label) }
             }
-            Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream.", color = TwitchColors.TextMuted, fontSize = 12.sp)
+            Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream. Mehr unter Einstellungen.", color = TwitchColors.TextMuted, fontSize = 12.sp)
         } else {
-            Text("OK: Folgen, Chat, Qualität, Bildgröße", color = TwitchColors.TextMuted, fontSize = 12.sp)
+            Text("OK: Folgen, Chat, Qualität, Bildformat", color = TwitchColors.TextMuted, fontSize = 12.sp)
         }
     }
 }
 
-/** The stream chat, read only, like the chat column next to a Twitch stream. */
+/** The stream chat, with Twitch emotes, laid out the way the settings say. */
 @Composable
-private fun ChatPanel(controller: TwitchController, login: String) {
+private fun ChatPanel(controller: TwitchController, channel: TwitchChannel, modifier: Modifier = Modifier) {
+    val settings = controller.settings
+    val login = channel.login
     val messages = remember(login) { mutableStateListOf<ChatMessage>() }
     val listState = rememberLazyListState()
 
@@ -274,11 +313,18 @@ private fun ChatPanel(controller: TwitchController, login: String) {
             main.removeCallbacksAndMessages(null)
         }
     }
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
+    val autoScroll = settings.chatAutoScroll.value
+    LaunchedEffect(messages.size, autoScroll) {
+        if (autoScroll && messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
-    Column(Modifier.width(320.dp).fillMaxHeight().background(TwitchColors.Surface)) {
+    val density = settings.chatDensity.value
+    Column(
+        modifier
+            .width(settings.chatWidth.value.width)
+            .fillMaxHeight()
+            .background(TwitchColors.Surface.copy(alpha = settings.chatOpacity.value.alpha)),
+    ) {
         Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
             Text("STREAM-CHAT", color = TwitchColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
@@ -295,32 +341,78 @@ private fun ChatPanel(controller: TwitchController, login: String) {
             state = listState,
             modifier = Modifier.fillMaxSize().focusProperties { canFocus = false },
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(density.gap),
         ) {
-            items(messages, key = { it.id }) { message ->
-                val nameColor = nameColor(message)
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.Bold)) { append(message.name) }
-                        if (message.action) {
-                            append(" ")
-                            withStyle(SpanStyle(color = nameColor, fontStyle = FontStyle.Italic)) { append(message.text) }
-                        } else {
-                            append(": ")
-                            append(message.text)
-                        }
-                    },
-                    color = TwitchColors.Text,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                )
-            }
+            items(messages, key = { it.id }) { message -> ChatLine(controller, message) }
         }
     }
 }
 
+/** One chat line: optional time, name, then text and emotes mixed the way Twitch shows them. */
+@Composable
+private fun ChatLine(controller: TwitchController, message: ChatMessage) {
+    val settings = controller.settings
+    val textSize = settings.chatTextSize.value.size
+    val density = settings.chatDensity.value
+    val emoteSize = (textSize * settings.emoteSize.value.scale)
+    val emoteDp = emoteSize.dp
+    val nameStyle = SpanStyle(
+        color = when (settings.chatPalette.value) {
+            ChatPalette.Twitch -> nameColor(message)
+            ChatPalette.Purple -> TwitchColors.Purple
+            ChatPalette.Mono -> Color.White
+        },
+        fontWeight = FontWeight.Bold,
+    )
+
+    val inline = mutableMapOf<String, InlineTextContent>()
+    val text = buildAnnotatedString {
+        val stamp = message.timestamp
+        if (settings.chatTimestamps.value && stamp != null) {
+            withStyle(SpanStyle(color = TwitchColors.TextMuted)) {
+                append(TIME_FORMAT.format(Date(stamp)))
+                append("  ")
+            }
+        }
+        withStyle(nameStyle) { append(message.name) }
+        append(if (message.action) " " else ": ")
+
+        message.parts(settings.chatEmotes.value).forEachIndexed { index, part ->
+            val emoteId = part.emoteId
+            if (emoteId != null) {
+                val key = "emote-$index"
+                inline[key] = InlineTextContent(
+                    Placeholder(width = emoteSize.sp, height = emoteSize.sp, placeholderVerticalAlign = PlaceholderVerticalAlign.Center),
+                ) {
+                    RemoteImage(emoteUrl(emoteId), Modifier.size(emoteDp), ContentScale.Fit)
+                }
+                appendInlineContent(key, part.text)
+            } else {
+                withStyle(SpanStyle(fontStyle = if (message.action) FontStyle.Italic else FontStyle.Normal)) {
+                    append(part.text)
+                }
+            }
+        }
+    }
+
+    BasicText(
+        text = text,
+        style = TextStyle(
+            color = TwitchColors.Text,
+            fontSize = textSize.sp,
+            lineHeight = (textSize * density.lineHeight).sp,
+        ),
+        inlineContent = inline,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun emoteUrl(id: String) = "https://static-cdn.jtvnw.net/emoticons/v2/$id/default/dark/2.0"
+
+private val TIME_FORMAT = SimpleDateFormat("HH:mm", Locale.GERMAN)
+
 private fun PictureFit.resizeMode(): Int = when (this) {
-    PictureFit.Fit, PictureFit.Shrink -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    PictureFit.Fit -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     PictureFit.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
     PictureFit.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 }
