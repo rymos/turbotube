@@ -95,6 +95,10 @@ class TwitchController(
         private set
     var playerPanelOpen by mutableStateOf(false)
 
+    /** The settings overlay on top of the running stream; every change shows immediately. */
+    var playerSettingsOpen by mutableStateOf(false)
+        private set
+
     /** Kept as reading accessors so the player keeps its short names. */
     val chatVisible: Boolean get() = settings.chatVisible.value
 
@@ -195,6 +199,7 @@ class TwitchController(
     fun play(channel: TwitchChannel, from: FocusRequester?) {
         returnFocus = from
         playerPanelOpen = false
+        playerSettingsOpen = false
         playing = channel
     }
 
@@ -247,7 +252,22 @@ class TwitchController(
     fun nextQuality() = settings.quality.next(1)
 
     /** Short press of Back. False when there is nothing left to go back to. */
+    fun openPlayerSettings() {
+        playerPanelOpen = false
+        playerSettingsOpen = true
+    }
+
+    /** Closing brings the info bar back, so the focus lands on a button instead of nowhere. */
+    fun closePlayerSettings() {
+        playerSettingsOpen = false
+        playerPanelOpen = true
+    }
+
     fun back(): Boolean = when {
+        playing != null && playerSettingsOpen -> {
+            closePlayerSettings()
+            true
+        }
         playing != null && playerPanelOpen -> {
             playerPanelOpen = false
             true

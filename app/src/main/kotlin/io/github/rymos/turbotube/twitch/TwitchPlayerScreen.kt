@@ -129,17 +129,26 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
             showInfo = false
         }
     }
-    LaunchedEffect(controller.playerPanelOpen, controller.focusRequests) {
-        runCatching { if (controller.playerPanelOpen) panelFocus.requestFocus() else screenFocus.requestFocus() }
+    LaunchedEffect(controller.playerPanelOpen, controller.playerSettingsOpen, controller.focusRequests) {
+        runCatching {
+            when {
+                // The settings panel puts the focus on its own first row
+                controller.playerSettingsOpen -> Unit
+                controller.playerPanelOpen -> panelFocus.requestFocus()
+                else -> screenFocus.requestFocus()
+            }
+        }
     }
 
     val inset = controller.settings.overscan.value
+    // Read in composition: the update block alone is not tracked and would never rerun
+    val fit = controller.settings.pictureFit.value
     val chatLeft = controller.settings.chatSide.value == ChatSide.Left
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Box(
             Modifier
                 .fillMaxSize()
-                .focusProperties { canFocus = active }
+                .focusProperties { canFocus = active && !controller.playerSettingsOpen }
                 .focusRequester(screenFocus)
                 .onKeyEvent {
                     val ok = it.key == Key.DirectionCenter || it.key == Key.Enter || it.key == Key.NumPadEnter
@@ -161,7 +170,7 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                         player = twitchPlayer.exoPlayer
                     }
                 },
-                update = { it.resizeMode = controller.pictureFit.resizeMode() },
+                update = { it.resizeMode = fit.resizeMode() },
                 // Some TVs cut the edges off (overscan); the setting insets the picture
                 modifier = Modifier.fillMaxSize().then(
                     if (inset != Overscan.Off) {
@@ -191,7 +200,7 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
             )
         }
 
-        if (controller.playerPanelOpen || showInfo) {
+        if ((controller.playerPanelOpen || showInfo) && !controller.playerSettingsOpen) {
             InfoBar(
                 controller,
                 channel,
@@ -203,6 +212,8 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                     .padding(start = if (controller.chatVisible && chatLeft) controller.settings.chatWidth.value.width else 0.dp),
             )
         }
+
+        if (controller.playerSettingsOpen) PlayerSettingsPanel(controller)
     }
 }
 
@@ -283,6 +294,11 @@ private fun InfoBar(
                     modifier = Modifier.focusProperties { canFocus = active },
                     colors = twitchButtonColors(),
                 ) { Text("Bild: " + controller.pictureFit.label) }
+                Button(
+                    onClick = { controller.openPlayerSettings() },
+                    modifier = Modifier.focusProperties { canFocus = active },
+                    colors = twitchButtonColors(),
+                ) { Text("Einstellungen") }
             }
             Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream. Mehr unter Einstellungen.", color = TwitchColors.TextMuted, fontSize = 12.sp)
         } else {
