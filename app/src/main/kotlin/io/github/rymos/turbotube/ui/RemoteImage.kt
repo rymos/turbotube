@@ -22,7 +22,7 @@ import okhttp3.Request
 object RemoteImages {
     lateinit var http: OkHttpClient
 
-    private val cache = LruCache<String, ImageBitmap>(120)
+    private val cache = LruCache<String, ImageBitmap>(512)
 
     fun cached(url: String): ImageBitmap? = cache.get(url)
 
@@ -38,13 +38,17 @@ object RemoteImages {
 }
 
 @Composable
-fun RemoteImage(url: String?, modifier: Modifier = Modifier) {
+fun RemoteImage(
+    url: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     val image by produceState(url?.let(RemoteImages::cached), url) {
         if (value == null && url != null) value = RemoteImages.load(url)
     }
     val loaded = image
     if (loaded != null) {
-        Image(loaded, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
+        Image(loaded, contentDescription = null, modifier = modifier, contentScale = contentScale)
     } else {
         Box(modifier.background(Color(0xFF2A2A2E)))
     }

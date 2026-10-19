@@ -33,6 +33,23 @@ class ChatParserTest {
     }
 
     @Test
+    fun `emotes with several ranges`() {
+        val line = "@emotes=25:0-4,12-16/1902:6-10;tmi-sent-ts=1730000000000 " +
+            ":a!a@a.tmi.twitch.tv PRIVMSG #x :Kappa test Keepo Kappa"
+        val message = ChatParser.parse(line)!!
+        assertEquals(listOf(ChatEmote("25", 0, 4), ChatEmote("1902", 6, 10), ChatEmote("25", 12, 16)), message.emotes)
+        assertEquals(1730000000000L, message.timestamp)
+        assertEquals("Kappa test Keepo Kappa", message.text)
+    }
+
+    @Test
+    fun `no emotes and no timestamp`() {
+        val message = ChatParser.parse(":a!a@a.tmi.twitch.tv PRIVMSG #x :hallo")!!
+        assertTrue(message.emotes.isEmpty())
+        assertNull(message.timestamp)
+    }
+
+    @Test
     fun `everything else is ignored`() {
         assertNull(ChatParser.parse("PING :tmi.twitch.tv"))
         assertNull(ChatParser.parse(":tmi.twitch.tv 001 justinfan12345 :Welcome, GLHF!"))

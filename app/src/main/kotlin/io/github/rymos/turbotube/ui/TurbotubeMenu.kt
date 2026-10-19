@@ -111,7 +111,7 @@ fun TurbotubeMenu(
                 Text(
                     "Dieses Menü öffnest du jederzeit, indem du die Zurück-Taste gedrückt hältst. " +
                         if (twitchMode) {
-                            "Favoriten speicherst du im Stream mit OK."
+                            "Favoriten speicherst du im Stream mit OK. Chat, Bild und Startseite stellst du unter Einstellungen ein."
                         } else {
                             "Werbeblocker und SponsorBlock stellst du in YouTube unter Einstellungen ein."
                         },
