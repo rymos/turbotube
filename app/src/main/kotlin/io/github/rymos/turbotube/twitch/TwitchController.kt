@@ -301,7 +301,10 @@ class TwitchController(
     }
 
     private suspend fun loadHome(): HomeRows = coroutineScope {
-        val followed = async { runCatching { allFollowed().filter { it.live } }.getOrDefault(emptyList()) }
+        val followed = async {
+            runCatching { allFollowed().sortedFor(settings.followingSort.value).filter { it.live } }
+                .getOrDefault(emptyList())
+        }
         val popular = async { api.topStreams() }
         val tops = async { runCatching { api.topCategories() }.getOrDefault(emptyList()) }
         val byCategory = tops.await().take(CATEGORY_ROWS).map { category ->
