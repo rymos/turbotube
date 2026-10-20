@@ -320,8 +320,9 @@ private fun FollowingPage(controller: TwitchController, enabled: Boolean) {
                 },
             )
         } else {
-            val live = load.value.filter { it.live }
-            val offline = load.value.filter { !it.live }
+            val sorted = load.value.sortedFor(controller.settings.followingSort.value)
+            val live = sorted.filter { it.live }
+            val offline = sorted.filter { !it.live }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 contentPadding = PaddingValues(PagePadding),
@@ -329,6 +330,7 @@ private fun FollowingPage(controller: TwitchController, enabled: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) { GridTitle("Folge ich") }
+                item(span = { GridItemSpan(maxLineSpan) }) { SortChips(controller.settings, enabled) }
                 if (live.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Live") }
                     items(live, key = { it.login }) { channel ->
@@ -341,6 +343,35 @@ private fun FollowingPage(controller: TwitchController, enabled: Boolean) {
                         OfflineCard(channel, enabled, { controller.play(channel, it) })
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Sort choice for the "Folge ich" list; OK on a chip picks it, the choice stays saved. */
+@Composable
+private fun SortChips(settings: TwitchSettings, enabled: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(bottom = 4.dp),
+    ) {
+        Text("Sortieren", color = TwitchColors.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(end = 4.dp))
+        FollowingSort.entries.forEach { option ->
+            val selected = settings.followingSort.value == option
+            FocusFrame(onClick = { settings.followingSort.value = option }, enabled = enabled) {
+                Text(
+                    option.label,
+                    color = if (selected) Color.White else TwitchColors.TextMuted,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier
+                        .background(
+                            if (selected) TwitchColors.Purple else Color.Transparent,
+                            RoundedCornerShape(4.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                )
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.rymos.turbotube.core.twitch.TwitchChannel
 
 /** Everything on the settings page shows a label, so one row builder can render all of them. */
 interface Labelled {
@@ -75,6 +76,30 @@ enum class CardSize(override val label: String, val width: Dp) : Labelled {
     Compact("Kompakt", 190.dp),
     Normal("Normal", 240.dp),
     Large("Groß", 300.dp),
+}
+
+/**
+ * Order of the "Folge ich" list. Recommended keeps Twitch's own order, live first; the viewer
+ * sorts put the busiest or quietest stream on top, offline channels follow alphabetically.
+ */
+enum class FollowingSort(override val label: String) : Labelled {
+    Recommended("Empfohlen"),
+    ViewersHigh("Viele Zuschauer"),
+    ViewersLow("Wenige Zuschauer"),
+    Name("Name"),
+}
+
+/** Live first, then by the chosen order; offline channels all have 0 viewers, so they sort by name. */
+fun List<TwitchChannel>.sortedFor(sort: FollowingSort): List<TwitchChannel> {
+    val liveFirst = compareByDescending<TwitchChannel> { it.live }
+    return when (sort) {
+        FollowingSort.Recommended -> sortedWith(liveFirst)
+        FollowingSort.ViewersHigh ->
+            sortedWith(liveFirst.thenByDescending { it.viewers }.thenBy { it.displayName.lowercase() })
+        FollowingSort.ViewersLow ->
+            sortedWith(liveFirst.thenBy { it.viewers }.thenBy { it.displayName.lowercase() })
+        FollowingSort.Name -> sortedBy { it.displayName.lowercase() }
+    }
 }
 
 /**
@@ -181,6 +206,7 @@ class TwitchSettings(private val prefs: SharedPreferences) {
     val cardSize = Choice("cardSize", CardSize.entries, CardSize.Normal)
     val showHero = Toggle("showHero", true)
     val showViewers = Toggle("showViewers", true)
+    val followingSort = Choice("followingSort", FollowingSort.entries, FollowingSort.Recommended)
 
     fun resetAll() {
         chatVisible.reset()
@@ -201,6 +227,7 @@ class TwitchSettings(private val prefs: SharedPreferences) {
         cardSize.reset()
         showHero.reset()
         showViewers.reset()
+        followingSort.reset()
     }
 
     private companion object {
