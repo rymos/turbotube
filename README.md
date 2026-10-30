@@ -91,8 +91,8 @@ To build the ad-removal script locally, fetch it into place first (this is what 
 
 ```sh
 mkdir -p app/src/main/assets
-curl -fsSL -o app/src/main/assets/tizentube-1.15.1.js \
-  https://cdn.jsdelivr.net/npm/@foxreis/tizentube@1.15.1/dist/userScript.js
+curl -fsSL -o app/src/main/assets/tizentube-1.15.2.js \
+  https://cdn.jsdelivr.net/npm/@foxreis/tizentube@1.15.2/dist/userScript.js
 ```
 
 The app still builds without that file; it then downloads the script from the network on first
