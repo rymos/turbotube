@@ -40,8 +40,8 @@ jobs:
       # the app checks the bundled copy against it again.
       - name: Fetch pinned TizenTube script
         run: |
-          version=1.15.1
-          sha=2fabc5b3f6961a7b0c9cd7b06e114134f1fe11d124960e2d13790fd716cbb7c5
+          version=1.15.2
+          sha=7a092351e0e348507ef9c97da8833d5f6717de628517f5299053b3c2073f1d69
           out="app/src/main/assets/tizentube-$version.js"
           mkdir -p "$(dirname "$out")"
           curl -fsSL --retry 3 --max-time 120 -o "$out" \

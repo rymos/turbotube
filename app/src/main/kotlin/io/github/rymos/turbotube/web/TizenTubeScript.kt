@@ -19,8 +19,8 @@ import java.security.MessageDigest
  * `.github/workflows/build.yml`.
  */
 object TizenTubeScript {
-    const val VERSION = "1.15.1"
-    private const val SHA256 = "2fabc5b3f6961a7b0c9cd7b06e114134f1fe11d124960e2d13790fd716cbb7c5"
+    const val VERSION = "1.15.2"
+    private const val SHA256 = "7a092351e0e348507ef9c97da8833d5f6717de628517f5299053b3c2073f1d69"
     private const val FILE_NAME = "tizentube-" + VERSION + ".js"
 
     /** Our own release first, so a start without a bundled script does not depend on a CDN. */
