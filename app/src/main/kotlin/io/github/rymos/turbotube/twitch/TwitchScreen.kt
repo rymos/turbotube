@@ -70,6 +70,7 @@ import androidx.tv.material3.darkColorScheme
 import io.github.rymos.turbotube.core.twitch.TwitchCategory
 import io.github.rymos.turbotube.core.twitch.TwitchChannel
 import io.github.rymos.turbotube.ui.RemoteImage
+import kotlinx.coroutines.delay
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -86,6 +87,18 @@ fun TwitchScreen(controller: TwitchController) {
     LaunchedEffect(Unit) { controller.refresh() }
 
     val playing = controller.playing
+
+    // Vorschauen veralten: auf den Listenseiten alle zwei Minuten neu laden, nicht im Player
+    LaunchedEffect(controller.page, playing) {
+        val page = controller.page
+        if (playing == null && (page == TwitchPage.Home || page == TwitchPage.Following || page == TwitchPage.Browse)) {
+            while (true) {
+                delay(120_000)
+                controller.refresh()
+            }
+        }
+    }
+
     val browsing = controller.interactive && playing == null
     val railFocus = remember { FocusRequester() }
 

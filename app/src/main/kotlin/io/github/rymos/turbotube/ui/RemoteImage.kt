@@ -6,8 +6,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -43,10 +44,10 @@ fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
 ) {
-    val image by produceState(url?.let(RemoteImages::cached), url) {
-        if (value == null && url != null) value = RemoteImages.load(url)
-    }
-    val loaded = image
+    // Der State hängt an der URL: bei einem Wechsel erscheint sofort der Platzhalter, nie das alte Bild
+    val state = remember(url) { mutableStateOf(url?.let(RemoteImages::cached)) }
+    LaunchedEffect(url) { if (state.value == null && url != null) state.value = RemoteImages.load(url) }
+    val loaded = state.value
     if (loaded != null) {
         Image(loaded, contentDescription = null, modifier = modifier, contentScale = contentScale)
     } else {

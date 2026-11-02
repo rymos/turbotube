@@ -166,7 +166,7 @@ class TwitchController(
                 TwitchPage.Browse -> {
                     val open = category
                     if (open != null) {
-                        categoryStreams = Load.Loading
+                        if (categoryStreams !is Load.Done) categoryStreams = Load.Loading
                         categoryStreams = load { api.categoryStreams(open.name) }
                     } else {
                         if (categories !is Load.Done) categories = Load.Loading

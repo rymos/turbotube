@@ -330,7 +330,7 @@ class TwitchApi(private val http: OkHttpClient) {
             title = node.string("title").orEmpty(),
             viewers = node.int("viewersCount"),
             game = node.path("game").string("displayName").orEmpty(),
-            previewUrl = node.string("previewImageURL"),
+            previewUrl = freshPreview(node.string("previewImageURL")),
             startedAt = node.string("createdAt"),
         )
     }
@@ -346,10 +346,16 @@ class TwitchApi(private val http: OkHttpClient) {
             title = live.string("title").orEmpty(),
             viewers = live.int("viewersCount"),
             game = live.path("game").string("displayName").orEmpty(),
-            previewUrl = live.string("previewImageURL"),
+            previewUrl = freshPreview(live.string("previewImageURL")),
             startedAt = live.string("createdAt"),
         )
     }
+
+    /**
+     * Die Vorschau-URL ist pro Login stabil, das Twitch-CDN cacht sie fünf Minuten. Ein
+     * Minuten-Bucket macht daraus pro Minute eine neue URL, damit die App ein neueres Bild lädt.
+     */
+    private fun freshPreview(url: String?): String? = url?.let { "$it?t=${System.currentTimeMillis() / 60_000}" }
 
     companion object {
         private const val CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
