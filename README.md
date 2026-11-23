@@ -124,15 +124,15 @@ ignored by the update button, because it has no build number.
   phone.
 - **Hold Back:** Turbotube menu (updates, reload, switch YouTube/Twitch, quit).
 - **Twitch:** the left rail has Home, Following, Browse, Search, Account and Settings; OK starts a
-  stream. Inside a stream OK opens the overlay with follow, chat on/off, quality and picture.
+  stream. Inside a stream OK opens the overlay with follow, chat on/off and quality.
   Back stops the stream. "Follow" stores the channel on the device only, not in the Twitch account.
 - **Twitch settings:** chat side (left/right), width, font size, line spacing, background opacity,
-  name colours, on/off for emotes with their own size, timestamps and auto-scroll; picture format,
-  quality, overscan border and how long the info bar stays. Also the size of the home cards, the
+  name colours, on/off for emotes with their own size, timestamps and auto-scroll; quality and how
+  long the info bar stays. Also the size of the home cards, the
   big hero banner and the viewer counts. Left/Right changes a value, OK moves it forward, and the
   "reset" row restores all defaults. Everything is stored on the device and applies immediately.
-  During a stream the same panel opens with "Settings" in the info bar, so picture format,
-  overscan and chat size can be judged on the live picture.
+  During a stream the same panel opens with "Settings" in the info bar, so chat size and the
+  info bar can be judged on the live picture.
 
 ## Limitations
 
