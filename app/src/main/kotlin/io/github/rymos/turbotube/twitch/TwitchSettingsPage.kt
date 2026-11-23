@@ -119,9 +119,6 @@ fun TwitchSettingsPage(controller: TwitchController, enabled: Boolean) {
         item(key = "fit") {
             SettingRow("Bildformat", settings.pictureFit.label, enabled) { settings.pictureFit.next(it) }
         }
-        item(key = "overscan") {
-            SettingRow("Rand (Overscan)", settings.overscan.label, enabled) { settings.overscan.next(it) }
-        }
         item(key = "infobar") {
             SettingRow("Infoleiste ausblenden nach", settings.infoBar.label, enabled) { settings.infoBar.next(it) }
         }

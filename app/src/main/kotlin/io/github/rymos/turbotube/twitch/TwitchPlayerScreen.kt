@@ -140,7 +140,6 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
         }
     }
 
-    val inset = controller.settings.overscan.value
     // Read in composition: the update block alone is not tracked and would never rerun
     val fit = controller.settings.pictureFit.value
     val chatLeft = controller.settings.chatSide.value == ChatSide.Left
@@ -171,14 +170,7 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                     }
                 },
                 update = { it.resizeMode = fit.resizeMode() },
-                // Some TVs cut the edges off (overscan); the setting insets the picture
-                modifier = Modifier.fillMaxSize().then(
-                    if (inset != Overscan.Off) {
-                        Modifier.padding(horizontal = inset.horizontal, vertical = inset.vertical)
-                    } else {
-                        Modifier
-                    },
-                ),
+                modifier = Modifier.fillMaxSize(),
             )
 
             when (val current = state) {

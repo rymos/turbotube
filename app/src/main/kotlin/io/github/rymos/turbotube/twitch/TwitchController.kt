@@ -38,7 +38,7 @@ enum class TwitchPage(val label: String) {
     Settings("Einstellungen"),
 }
 
-/** How the stream fills the screen. Overscan insets are a separate setting. */
+/** How the stream fills the screen. */
 enum class PictureFit(override val label: String) : Labelled {
     Fit("Einpassen"),
     Stretch("Gestreckt"),

@@ -57,14 +57,6 @@ enum class EmoteSize(override val label: String, val scale: Float) : Labelled {
     Large("Groß", 1.5f),
 }
 
-/** How much of the picture the TV's overscan eats; the stream is inset by this much. */
-enum class Overscan(override val label: String, val horizontal: Dp, val vertical: Dp) : Labelled {
-    Off("Keine", 0.dp, 0.dp),
-    Small("Schmal", 16.dp, 8.dp),
-    Medium("Mittel", 40.dp, 24.dp),
-    Large("Groß", 64.dp, 40.dp),
-}
-
 enum class InfoBarTime(override val label: String, val millis: Long) : Labelled {
     Short("3 Sekunden", 3_000L),
     Normal("5 Sekunden", 5_000L),
@@ -107,6 +99,12 @@ fun List<TwitchChannel>.sortedFor(sort: FollowingSort): List<TwitchChannel> {
  * preferences, reads are Compose state, so a changed value redraws the player immediately.
  */
 class TwitchSettings(private val prefs: SharedPreferences) {
+
+    init {
+        // Old builds let the user inset the picture for TVs that cut the edges. The TV is the
+        // place to fix that, so the leftover key goes away instead of resurfacing on a later read.
+        prefs.edit().remove("overscan").apply()
+    }
 
     inner class Toggle(private val key: String, defaultValue: Boolean) {
         private val fallback = defaultValue
@@ -200,7 +198,6 @@ class TwitchSettings(private val prefs: SharedPreferences) {
 
     val pictureFit = Choice("fit", PictureFit.entries, PictureFit.Fit)
     val quality = Steps("quality", QUALITIES, 0) { if (it == 0) "Auto" else "${it}p" }
-    val overscan = Choice("overscan", Overscan.entries, Overscan.Off)
     val infoBar = Choice("infoBar", InfoBarTime.entries, InfoBarTime.Normal)
 
     val cardSize = Choice("cardSize", CardSize.entries, CardSize.Normal)
@@ -222,7 +219,6 @@ class TwitchSettings(private val prefs: SharedPreferences) {
         chatAutoScroll.reset()
         pictureFit.reset()
         quality.reset()
-        overscan.reset()
         infoBar.reset()
         cardSize.reset()
         showHero.reset()

@@ -25,7 +25,7 @@ import androidx.tv.material3.Text
 
 /**
  * Settings on top of the running stream: every change is visible in the picture and the chat
- * right away, which is what makes overscan, picture format and chat size adjustable at all.
+ * right away, which is what makes picture format and chat size adjustable at all.
  */
 @Composable
 fun PlayerSettingsPanel(controller: TwitchController) {
@@ -69,10 +69,6 @@ fun PlayerSettingsPanel(controller: TwitchController) {
                 item(key = "fit") {
                     SettingRow("Bildformat", settings.pictureFit.label, enabled) { settings.pictureFit.next(it) }
                 }
-                item(key = "overscan") {
-                    SettingRow("Rand (Overscan)", settings.overscan.label, enabled) { settings.overscan.next(it) }
-                }
-
                 item(key = "chat") { Section("Chat") }
                 item(key = "chat-visible") {
                     SettingRow(
