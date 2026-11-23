@@ -101,9 +101,9 @@ fun List<TwitchChannel>.sortedFor(sort: FollowingSort): List<TwitchChannel> {
 class TwitchSettings(private val prefs: SharedPreferences) {
 
     init {
-        // Old builds let the user inset the picture for TVs that cut the edges. The TV is the
-        // place to fix that, so the leftover key goes away instead of resurfacing on a later read.
-        prefs.edit().remove("overscan").apply()
+        // Old builds let the user inset or crop the picture for TVs that cut the edges. The TV is
+        // the place to fix that, so the leftover keys go away instead of resurfacing later.
+        prefs.edit().remove("overscan").remove("fit").apply()
     }
 
     inner class Toggle(private val key: String, defaultValue: Boolean) {
@@ -196,7 +196,6 @@ class TwitchSettings(private val prefs: SharedPreferences) {
     val chatTimestamps = Toggle("chatTimestamps", false)
     val chatAutoScroll = Toggle("chatAutoScroll", true)
 
-    val pictureFit = Choice("fit", PictureFit.entries, PictureFit.Fit)
     val quality = Steps("quality", QUALITIES, 0) { if (it == 0) "Auto" else "${it}p" }
     val infoBar = Choice("infoBar", InfoBarTime.entries, InfoBarTime.Normal)
 
@@ -217,7 +216,6 @@ class TwitchSettings(private val prefs: SharedPreferences) {
         emoteSize.reset()
         chatTimestamps.reset()
         chatAutoScroll.reset()
-        pictureFit.reset()
         quality.reset()
         infoBar.reset()
         cardSize.reset()

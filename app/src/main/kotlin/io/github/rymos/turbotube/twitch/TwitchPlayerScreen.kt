@@ -140,8 +140,6 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
         }
     }
 
-    // Read in composition: the update block alone is not tracked and would never rerun
-    val fit = controller.settings.pictureFit.value
     val chatLeft = controller.settings.chatSide.value == ChatSide.Left
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Box(
@@ -169,7 +167,7 @@ fun TwitchPlayerScreen(controller: TwitchController, channel: TwitchChannel) {
                         player = twitchPlayer.exoPlayer
                     }
                 },
-                update = { it.resizeMode = fit.resizeMode() },
+                update = { it.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -282,11 +280,6 @@ private fun InfoBar(
                     colors = twitchButtonColors(),
                 ) { Text("Qualität: " + (controller.maxHeight?.let { "${it}p" } ?: "Auto")) }
                 Button(
-                    onClick = { controller.nextPictureFit() },
-                    modifier = Modifier.focusProperties { canFocus = active },
-                    colors = twitchButtonColors(),
-                ) { Text("Bild: " + controller.pictureFit.label) }
-                Button(
                     onClick = { controller.openPlayerSettings() },
                     modifier = Modifier.focusProperties { canFocus = active },
                     colors = twitchButtonColors(),
@@ -294,7 +287,7 @@ private fun InfoBar(
             }
             Text("Zurück schließt diese Leiste, nochmal Zurück beendet den Stream. Mehr unter Einstellungen.", color = TwitchColors.TextMuted, fontSize = 12.sp)
         } else {
-            Text("OK: Folgen, Chat, Qualität, Bildformat", color = TwitchColors.TextMuted, fontSize = 12.sp)
+            Text("OK: Folgen, Chat, Qualität", color = TwitchColors.TextMuted, fontSize = 12.sp)
         }
     }
 }
@@ -418,12 +411,6 @@ private fun ChatLine(controller: TwitchController, message: ChatMessage) {
 private fun emoteUrl(id: String) = "https://static-cdn.jtvnw.net/emoticons/v2/$id/default/dark/2.0"
 
 private val TIME_FORMAT = SimpleDateFormat("HH:mm", Locale.GERMAN)
-
-private fun PictureFit.resizeMode(): Int = when (this) {
-    PictureFit.Fit -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-    PictureFit.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-    PictureFit.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-}
 
 /** Twitch gives people without a chosen colour one of a few defaults. */
 private fun nameColor(message: ChatMessage): Color {

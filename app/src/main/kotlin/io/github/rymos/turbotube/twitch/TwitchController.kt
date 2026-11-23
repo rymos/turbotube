@@ -38,13 +38,6 @@ enum class TwitchPage(val label: String) {
     Settings("Einstellungen"),
 }
 
-/** How the stream fills the screen. */
-enum class PictureFit(override val label: String) : Labelled {
-    Fit("Einpassen"),
-    Stretch("Gestreckt"),
-    Zoom("Zoom"),
-}
-
 /** Where the sign-in stands. */
 sealed interface SignIn {
     data object Idle : SignIn
@@ -101,8 +94,6 @@ class TwitchController(
 
     /** Kept as reading accessors so the player keeps its short names. */
     val chatVisible: Boolean get() = settings.chatVisible.value
-
-    val pictureFit: PictureFit get() = settings.pictureFit.value
 
     /** The connected Twitch account; its followed channels show up next to the ones saved here. */
     var account by mutableStateOf<TwitchAccount?>(
@@ -241,8 +232,6 @@ class TwitchController(
         home = Load.Loading
         following = Load.Loading
     }
-
-    fun nextPictureFit() = settings.pictureFit.next(1)
 
     fun isFollowed(login: String) = favorites.contains(login) || login in accountFollows
 

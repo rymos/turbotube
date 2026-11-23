@@ -66,9 +66,6 @@ fun PlayerSettingsPanel(controller: TwitchController) {
                         onChange = { settings.quality.next(it) },
                     )
                 }
-                item(key = "fit") {
-                    SettingRow("Bildformat", settings.pictureFit.label, enabled) { settings.pictureFit.next(it) }
-                }
                 item(key = "chat") { Section("Chat") }
                 item(key = "chat-visible") {
                     SettingRow(
